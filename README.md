@@ -4,7 +4,7 @@
 
 # `dialekt`
 
-**Dialekt** [*diˈalɛkt, German for "dialect"*] is a CLI toolkit that automates application string translation using large language models, regardless of your tech stack. It reads your source locale files, detects missing keys in target locales, calls an LLM to produce translations, and writes the results back. Framework-specific adapters handle the file I/O and source code scanning, while the core package provides a harness that handles chunking, retries, and missing-key detection.
+**Dialekt** [*diˈalɛkt, German for "dialect"*] is a CLI toolkit that automates application string translation using large language models, regardless of your tech stack. It reads your source locale files, detects missing keys in target locales, calls an LLM to produce translations, and writes the results back. 
 
 <br>
 
