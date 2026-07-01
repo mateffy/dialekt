@@ -1,24 +1,22 @@
-import { ToolLoopAgent, tool, hasToolCall } from 'ai';
-import { Effect, Schedule } from 'effect';
-import { z } from 'zod';
-import type { LanguageModel } from 'ai';
-import type { TranslationContext, TranslationStrategy } from './types.js';
-import { TranslationFailedError } from './types.js';
-import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
+import { ToolLoopAgent, tool, hasToolCall } from "ai";
+import { Effect, Schedule } from "effect";
+import { z } from "zod";
+import type { LanguageModel } from "ai";
+import type { TranslationContext, TranslationStrategy } from "./types.js";
+import { TranslationFailedError } from "./types.js";
+import { buildSystemPrompt, buildUserPrompt } from "./prompt.js";
 
 async function tryTranslateChunk(
   model: LanguageModel,
   ctx: TranslationContext,
 ): Promise<Record<string, string>> {
-  const schema = z.object(
-    Object.fromEntries(ctx.keys.map((key: string) => [key, z.string()])),
-  );
+  const schema = z.object(Object.fromEntries(ctx.keys.map((key: string) => [key, z.string()])));
 
   let captured: Record<string, string> | null = null;
 
   const submitTranslations = tool({
     description:
-      'Submit the final translations for every requested key. Call this exactly once, with every key filled in.',
+      "Submit the final translations for every requested key. Call this exactly once, with every key filled in.",
     inputSchema: schema,
     execute: async (input) => {
       captured = input as Record<string, string>;
@@ -30,18 +28,16 @@ async function tryTranslateChunk(
     model,
     instructions: buildSystemPrompt(ctx.sourceLocale, ctx.targetLocale),
     tools: { submitTranslations },
-    stopWhen: hasToolCall('submitTranslations'),
+    stopWhen: hasToolCall("submitTranslations"),
   });
 
   await agent.generate({ prompt: buildUserPrompt(ctx) });
   if (captured === null) {
-    throw new Error('Agent finished without calling submitTranslations');
+    throw new Error("Agent finished without calling submitTranslations");
   }
-  const missing = ctx.keys.filter(
-    (key: string) => !(key in (captured as Record<string, string>)),
-  );
+  const missing = ctx.keys.filter((key: string) => !(key in (captured as Record<string, string>)));
   if (missing.length > 0) {
-    throw new Error(`Model omitted keys: ${missing.join(', ')}`);
+    throw new Error(`Model omitted keys: ${missing.join(", ")}`);
   }
   return captured;
 }
@@ -51,7 +47,7 @@ export function createToolLoopStrategy(deps: {
   retry: { maxAttempts: number; baseDelayMs: number };
 }): TranslationStrategy {
   return {
-    name: 'tool-loop-agent',
+    name: "tool-loop-agent",
     translateChunk: (ctx: TranslationContext) =>
       Effect.tryPromise({
         try: () => tryTranslateChunk(deps.model, ctx),

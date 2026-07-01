@@ -1,6 +1,6 @@
-import { Effect } from 'effect';
-import type { TranslationAdapter, ResourceRef, AdapterReadError } from '../adapter/types.js';
-import { diffKeys } from '../keys/flatten.js';
+import { Effect } from "effect";
+import type { TranslationAdapter, ResourceRef, AdapterReadError } from "../adapter/types.js";
+import { diffKeys } from "../keys/flatten.js";
 
 export interface MissingKeyEntry {
   readonly adapter: string;
@@ -23,9 +23,7 @@ export function computeMissingKeys(
           Effect.gen(function* () {
             const targetMap = yield* adapter.readResource(locale, resource);
             const missing = diffKeys(sourceMap, targetMap);
-            return missing.length > 0
-              ? [{ adapter: adapter.name, locale, resource, missing }]
-              : [];
+            return missing.length > 0 ? [{ adapter: adapter.name, locale, resource, missing }] : [];
           }),
         );
         return localeEntries.flat();

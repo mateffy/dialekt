@@ -1,12 +1,12 @@
-import { Command, Options } from '@effect/cli';
-import { Effect, Console, Option } from 'effect';
-import { loadConfig } from '../../config/load-config.js';
-import { resolveEffectiveConfig } from '../config-resolution.js';
-import { computeMissingKeys } from '../../translation/missing-keys.js';
-import { detectFormat, type OutputFormat } from '../format.js';
-import { formatMissingKeys } from '../formatters.js';
-import type { DialektConfig } from '../../config/types.js';
-import type { TranslationAdapter } from '../../adapter/types.js';
+import { Command, Options } from "@effect/cli";
+import { Effect, Console, Option } from "effect";
+import { loadConfig } from "../../config/load-config.js";
+import { resolveEffectiveConfig } from "../config-resolution.js";
+import { computeMissingKeys } from "../../translation/missing-keys.js";
+import { detectFormat, type OutputFormat } from "../format.js";
+import { formatMissingKeys } from "../formatters.js";
+import type { DialektConfig } from "../../config/types.js";
+import type { TranslationAdapter } from "../../adapter/types.js";
 
 export interface MissingFlags {
   readonly config: string;
@@ -30,7 +30,10 @@ export function runMissing(
     adapter: TranslationAdapter,
     sourceLocale: string,
     targetLocales: readonly string[],
-  ) => Effect.Effect<readonly MissingKeysEntry[], unknown> = computeMissingKeys as unknown as typeof missingKeysComputer,
+  ) => Effect.Effect<
+    readonly MissingKeysEntry[],
+    unknown
+  > = computeMissingKeys as unknown as typeof missingKeysComputer,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
 ): Effect.Effect<void, never> {
   return Effect.gen(function* () {
@@ -79,10 +82,14 @@ export function runMissing(
   }).pipe(Effect.mapError((e) => e as never)) as Effect.Effect<void, never, never>;
 }
 
-export const missingCommand = Command.make('missing', {
-  config: Options.text('config').pipe(Options.withDefault('./dialekt.config.ts')),
-  adapter: Options.optional(Options.text('adapter')),
-  baseLanguage: Options.optional(Options.text('base-language')),
-  language: Options.optional(Options.text('language')),
-  format: Options.optional(Options.text('format')),
-}, (flags) => runMissing(flags));
+export const missingCommand = Command.make(
+  "missing",
+  {
+    config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
+    adapter: Options.optional(Options.text("adapter")),
+    baseLanguage: Options.optional(Options.text("base-language")),
+    language: Options.optional(Options.text("language")),
+    format: Options.optional(Options.text("format")),
+  },
+  (flags) => runMissing(flags),
+);

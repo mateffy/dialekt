@@ -1,7 +1,7 @@
 allowBuilds:
-  '@parcel/watcher': true
+  "@parcel/watcher": true
   msgpackr-extract: true
 minimumReleaseAgeExclude:
-  - '@ai-sdk/anthropic@4.0.4'
+  - "@ai-sdk/anthropic@4.0.4"
 overrides:
-  'dialekt': 'link:'
+  "dialekt": "link:"

@@ -1,12 +1,12 @@
-import { Command, Options } from '@effect/cli';
-import { Effect, Console, Option } from 'effect';
-import { loadConfig } from '../../config/load-config.js';
-import { resolveEffectiveConfig } from '../config-resolution.js';
-import { computeMissingKeys } from '../../translation/missing-keys.js';
-import { detectFormat, type OutputFormat } from '../format.js';
-import { formatValidate, formatError } from '../formatters.js';
-import type { DialektConfig } from '../../config/types.js';
-import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
+import { Command, Options } from "@effect/cli";
+import { Effect, Console, Option } from "effect";
+import { loadConfig } from "../../config/load-config.js";
+import { resolveEffectiveConfig } from "../config-resolution.js";
+import { computeMissingKeys } from "../../translation/missing-keys.js";
+import { detectFormat, type OutputFormat } from "../format.js";
+import { formatValidate, formatError } from "../formatters.js";
+import type { DialektConfig } from "../../config/types.js";
+import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
 
 export interface ValidateFlags {
   readonly config: string;
@@ -30,7 +30,10 @@ export function runValidate(
     adapter: TranslationAdapter,
     sourceLocale: string,
     targetLocales: readonly string[],
-  ) => Effect.Effect<readonly MissingEntry[], unknown> = computeMissingKeys as unknown as typeof missingKeysComputer,
+  ) => Effect.Effect<
+    readonly MissingEntry[],
+    unknown
+  > = computeMissingKeys as unknown as typeof missingKeysComputer,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
 ): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
@@ -75,9 +78,7 @@ export function runValidate(
 
     const passing = entries.length === 0;
 
-    yield* logger(
-      formatValidate({ passing, entries }, format),
-    );
+    yield* logger(formatValidate({ passing, entries }, format));
 
     if (!passing) {
       yield* Effect.sync(() => {
@@ -87,10 +88,14 @@ export function runValidate(
   }).pipe(Effect.mapError((e) => e as Error)) as Effect.Effect<void, Error, never>;
 }
 
-export const validateCommand = Command.make('validate', {
-  config: Options.text('config').pipe(Options.withDefault('./dialekt.config.ts')),
-  adapter: Options.optional(Options.text('adapter')),
-  baseLanguage: Options.optional(Options.text('base-language')),
-  language: Options.optional(Options.text('language')),
-  format: Options.optional(Options.text('format')),
-}, (flags) => runValidate(flags));
+export const validateCommand = Command.make(
+  "validate",
+  {
+    config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
+    adapter: Options.optional(Options.text("adapter")),
+    baseLanguage: Options.optional(Options.text("base-language")),
+    language: Options.optional(Options.text("language")),
+    format: Options.optional(Options.text("format")),
+  },
+  (flags) => runValidate(flags),
+);

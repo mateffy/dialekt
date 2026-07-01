@@ -12,7 +12,7 @@ Rules:
 - Escape double quotes in translations with a backslash when needed.`;
 }
 
-import type { TranslationContext } from './types.js';
+import type { TranslationContext } from "./types.js";
 
 export function buildUserPrompt(ctx: TranslationContext): string {
   const sourceJson = JSON.stringify(ctx.sourceMap, null, 2);
@@ -20,7 +20,7 @@ export function buildUserPrompt(ctx: TranslationContext): string {
 
   const keysWithValues: Record<string, string> = {};
   for (const key of ctx.keys) {
-    keysWithValues[key] = ctx.sourceMap[key] ?? '';
+    keysWithValues[key] = ctx.sourceMap[key] ?? "";
   }
   const keysJson = JSON.stringify(keysWithValues, null, 2);
 

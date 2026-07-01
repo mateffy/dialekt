@@ -1,11 +1,11 @@
-import { Command, Options } from '@effect/cli';
-import { Effect, Console, Option } from 'effect';
-import { loadConfig } from '../../config/load-config.js';
-import { resolveEffectiveConfig } from '../config-resolution.js';
-import { detectFormat, type OutputFormat } from '../format.js';
-import { formatUnusedKeys, formatError } from '../formatters.js';
-import type { DialektConfig } from '../../config/types.js';
-import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
+import { Command, Options } from "@effect/cli";
+import { Effect, Console, Option } from "effect";
+import { loadConfig } from "../../config/load-config.js";
+import { resolveEffectiveConfig } from "../config-resolution.js";
+import { detectFormat, type OutputFormat } from "../format.js";
+import { formatUnusedKeys, formatError } from "../formatters.js";
+import type { DialektConfig } from "../../config/types.js";
+import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
 
 export interface UnusedFlags {
   readonly config: string;
@@ -79,9 +79,13 @@ export function runUnused(
   }).pipe(Effect.mapError((e) => e as never)) as Effect.Effect<void, never, never>;
 }
 
-export const unusedCommand = Command.make('unused', {
-  config: Options.text('config').pipe(Options.withDefault('./dialekt.config.ts')),
-  adapter: Options.optional(Options.text('adapter')),
-  baseLanguage: Options.optional(Options.text('base-language')),
-  format: Options.optional(Options.text('format')),
-}, (flags) => runUnused(flags));
+export const unusedCommand = Command.make(
+  "unused",
+  {
+    config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
+    adapter: Options.optional(Options.text("adapter")),
+    baseLanguage: Options.optional(Options.text("base-language")),
+    format: Options.optional(Options.text("format")),
+  },
+  (flags) => runUnused(flags),
+);

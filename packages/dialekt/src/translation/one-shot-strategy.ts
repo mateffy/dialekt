@@ -1,18 +1,16 @@
-import { generateText, Output } from 'ai';
-import { Effect, Schedule } from 'effect';
-import { z } from 'zod';
-import type { LanguageModel } from 'ai';
-import type { TranslationContext, TranslationStrategy } from './types.js';
-import { TranslationFailedError } from './types.js';
-import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
+import { generateText, Output } from "ai";
+import { Effect, Schedule } from "effect";
+import { z } from "zod";
+import type { LanguageModel } from "ai";
+import type { TranslationContext, TranslationStrategy } from "./types.js";
+import { TranslationFailedError } from "./types.js";
+import { buildSystemPrompt, buildUserPrompt } from "./prompt.js";
 
 async function tryTranslateChunk(
   model: LanguageModel,
   ctx: TranslationContext,
 ): Promise<Record<string, string>> {
-  const schema = z.object(
-    Object.fromEntries(ctx.keys.map((key: string) => [key, z.string()])),
-  );
+  const schema = z.object(Object.fromEntries(ctx.keys.map((key: string) => [key, z.string()])));
   const { output } = await generateText({
     model,
     system: buildSystemPrompt(ctx.sourceLocale, ctx.targetLocale),
@@ -21,7 +19,7 @@ async function tryTranslateChunk(
   });
   const missing = ctx.keys.filter((key: string) => !(key in output));
   if (missing.length > 0) {
-    throw new Error(`Model omitted keys: ${missing.join(', ')}`);
+    throw new Error(`Model omitted keys: ${missing.join(", ")}`);
   }
   return output as Record<string, string>;
 }
@@ -31,7 +29,7 @@ export function createOneShotStrategy(deps: {
   retry: { maxAttempts: number; baseDelayMs: number };
 }): TranslationStrategy {
   return {
-    name: 'one-shot',
+    name: "one-shot",
     translateChunk: (ctx: TranslationContext) =>
       Effect.tryPromise({
         try: () => tryTranslateChunk(deps.model, ctx),

@@ -2,35 +2,35 @@
 
 ## Tested Areas Map
 
-| Export | Test File | Status |
-|--------|-----------|--------|
-| `AdapterReadError` / `AdapterWriteError` | `src/adapter/types.test.ts` | ✅ |
-| `flattenObject` / `unflattenObject` / `diffKeys` | `src/keys/flatten.test.ts` | ✅ |
-| `chunkKeys` | `src/translation/chunking.test.ts` | ✅ |
-| `computeMissingKeys` | `src/translation/missing-keys.test.ts` | ✅ |
-| `resolveModel` / `UnknownProviderError` | `src/translation/model-registry.test.ts` | ✅ |
-| `createOneShotStrategy` | `src/translation/one-shot-strategy.test.ts` | ✅ |
-| `createToolLoopStrategy` | `src/translation/tool-loop-strategy.test.ts` | ✅ |
-| `runTranslation` | `src/translation/orchestrator.test.ts` | ✅ |
-| `buildSystemPrompt` / `buildUserPrompt` | `src/translation/prompt.test.ts` | ✅ |
-| `TranslationFailedError` | `src/translation/types.test.ts` | ✅ |
-| `runBenchmarkedChunk` / `summarizeBenchmarkResults` | `src/benchmark/metrics.test.ts` | ✅ |
-| `formatBenchmarkReport` | `src/benchmark/report.test.ts` | ✅ |
-| `runBenchmark` | `src/benchmark/runner.test.ts` | ✅ |
-| `translateCommand` / `runTranslate` | `src/cli/commands/translate.test.ts` | ✅ |
-| `validateCommand` / `runValidate` | `src/cli/commands/validate.test.ts` | ✅ |
-| `addCommand` / `runAdd` / `parseAddTokens` | `src/cli/commands/add.test.ts` | ✅ |
-| `missingCommand` / `runMissing` | `src/cli/commands/missing.test.ts` | ✅ |
-| `unusedCommand` / `runUnused` | `src/cli/commands/unused.test.ts` | ✅ |
-| `languagesCommand` / `runLanguages` | `src/cli/commands/languages.test.ts` | ✅ |
-| `benchmarkCommand` / `runBenchmarkCommand` | `src/cli/commands/benchmark.test.ts` | ✅ |
-| `resolveEffectiveConfig` | `src/cli/config-resolution.test.ts` | ✅ |
-| `loadConfig` / `ConfigLoadError` | `src/config/load-config.test.ts` | ✅ |
-| `defineConfig` | `src/config/define-config.test.ts` | ✅ |
-| config types | `src/config/types.test.ts` | ✅ |
-| `readFileIfExists` / `writeFileEnsuringDir` | `src/sdk/file-io.test.ts` | ✅ |
-| `NodePlatformLayer` | `src/sdk/node-layer.test.ts` | ✅ |
-| `readPhpArrayAsJson` / `PhpExecutionError` | `src/sdk/php-array-reader.test.ts` | ✅ |
+| Export                                              | Test File                                    | Status |
+| --------------------------------------------------- | -------------------------------------------- | ------ |
+| `AdapterReadError` / `AdapterWriteError`            | `src/adapter/types.test.ts`                  | ✅     |
+| `flattenObject` / `unflattenObject` / `diffKeys`    | `src/keys/flatten.test.ts`                   | ✅     |
+| `chunkKeys`                                         | `src/translation/chunking.test.ts`           | ✅     |
+| `computeMissingKeys`                                | `src/translation/missing-keys.test.ts`       | ✅     |
+| `resolveModel` / `UnknownProviderError`             | `src/translation/model-registry.test.ts`     | ✅     |
+| `createOneShotStrategy`                             | `src/translation/one-shot-strategy.test.ts`  | ✅     |
+| `createToolLoopStrategy`                            | `src/translation/tool-loop-strategy.test.ts` | ✅     |
+| `runTranslation`                                    | `src/translation/orchestrator.test.ts`       | ✅     |
+| `buildSystemPrompt` / `buildUserPrompt`             | `src/translation/prompt.test.ts`             | ✅     |
+| `TranslationFailedError`                            | `src/translation/types.test.ts`              | ✅     |
+| `runBenchmarkedChunk` / `summarizeBenchmarkResults` | `src/benchmark/metrics.test.ts`              | ✅     |
+| `formatBenchmarkReport`                             | `src/benchmark/report.test.ts`               | ✅     |
+| `runBenchmark`                                      | `src/benchmark/runner.test.ts`               | ✅     |
+| `translateCommand` / `runTranslate`                 | `src/cli/commands/translate.test.ts`         | ✅     |
+| `validateCommand` / `runValidate`                   | `src/cli/commands/validate.test.ts`          | ✅     |
+| `addCommand` / `runAdd` / `parseAddTokens`          | `src/cli/commands/add.test.ts`               | ✅     |
+| `missingCommand` / `runMissing`                     | `src/cli/commands/missing.test.ts`           | ✅     |
+| `unusedCommand` / `runUnused`                       | `src/cli/commands/unused.test.ts`            | ✅     |
+| `languagesCommand` / `runLanguages`                 | `src/cli/commands/languages.test.ts`         | ✅     |
+| `benchmarkCommand` / `runBenchmarkCommand`          | `src/cli/commands/benchmark.test.ts`         | ✅     |
+| `resolveEffectiveConfig`                            | `src/cli/config-resolution.test.ts`          | ✅     |
+| `loadConfig` / `ConfigLoadError`                    | `src/config/load-config.test.ts`             | ✅     |
+| `defineConfig`                                      | `src/config/define-config.test.ts`           | ✅     |
+| config types                                        | `src/config/types.test.ts`                   | ✅     |
+| `readFileIfExists` / `writeFileEnsuringDir`         | `src/sdk/file-io.test.ts`                    | ✅     |
+| `NodePlatformLayer`                                 | `src/sdk/node-layer.test.ts`                 | ✅     |
+| `readPhpArrayAsJson` / `PhpExecutionError`          | `src/sdk/php-array-reader.test.ts`           | ✅     |
 
 ## Known Coverage Gaps
 

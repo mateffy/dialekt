@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect } from "effect";
 
 /** Opaque adapter-specific identifier for one resource within a locale. */
 export interface ResourceRef {
@@ -6,14 +6,14 @@ export interface ResourceRef {
   readonly label: string; // human-readable, for CLI output
 }
 
-export class AdapterReadError extends Data.TaggedError('AdapterReadError')<{
+export class AdapterReadError extends Data.TaggedError("AdapterReadError")<{
   readonly adapter: string;
   readonly locale: string;
   readonly resource: string;
   readonly cause: unknown;
 }> {}
 
-export class AdapterWriteError extends Data.TaggedError('AdapterWriteError')<{
+export class AdapterWriteError extends Data.TaggedError("AdapterWriteError")<{
   readonly adapter: string;
   readonly locale: string;
   readonly resource: string;
@@ -34,7 +34,10 @@ export interface TranslationAdapter {
   listResources(locale: string): Effect.Effect<readonly ResourceRef[], AdapterReadError>;
 
   /** Read one resource, flattened to dot-notation key → string value. Returns {} if the resource does not exist. */
-  readResource(locale: string, resource: ResourceRef): Effect.Effect<Record<string, string>, AdapterReadError>;
+  readResource(
+    locale: string,
+    resource: ResourceRef,
+  ): Effect.Effect<Record<string, string>, AdapterReadError>;
 
   /** Write a full flattened key→value map back to a resource, unflattening as needed. Creates the resource if absent and `create` capability allows it. */
   writeResource(

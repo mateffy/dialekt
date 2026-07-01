@@ -24,7 +24,7 @@ export function chunkKeys(
   let currentChars = 0;
 
   for (const key of keys) {
-    const value = sourceMap[key] ?? '';
+    const value = sourceMap[key] ?? "";
     const itemChars = key.length + value.length + ITEM_JSON_OVERHEAD;
 
     // If a single key is larger than the entire chunk, force it through alone.

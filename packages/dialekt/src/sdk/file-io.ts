@@ -1,5 +1,5 @@
-import { FileSystem, Path } from '@effect/platform';
-import { Effect } from 'effect';
+import { FileSystem, Path } from "@effect/platform";
+import { Effect } from "effect";
 
 export function readFileIfExists(path: string) {
   return Effect.gen(function* () {

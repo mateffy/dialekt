@@ -1,4 +1,4 @@
-import * as m from './paraglide/messages.js';
+import * as m from "./paraglide/messages.js";
 
 export function getAuthLabels() {
   return {

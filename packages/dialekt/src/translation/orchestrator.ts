@@ -1,10 +1,10 @@
-import { Effect } from 'effect';
-import { chunkKeys } from './chunking.js';
-import { diffKeys } from '../keys/flatten.js';
-import type { TranslationAdapter } from '../adapter/types.js';
-import type { TranslationStrategy } from './types.js';
-import { TranslationFailedError } from './types.js';
-import type { ChunkingConfig } from '../config/types.js';
+import { Effect } from "effect";
+import { chunkKeys } from "./chunking.js";
+import { diffKeys } from "../keys/flatten.js";
+import type { TranslationAdapter } from "../adapter/types.js";
+import type { TranslationStrategy } from "./types.js";
+import { TranslationFailedError } from "./types.js";
+import type { ChunkingConfig } from "../config/types.js";
 
 export interface TranslationRunConfig {
   readonly adapters: readonly TranslationAdapter[];
@@ -20,9 +20,7 @@ export function runTranslation(config: TranslationRunConfig) {
 
     for (const adapter of config.adapters) {
       const locales =
-        config.targetLocales.length > 0
-          ? config.targetLocales
-          : yield* adapter.listLocales();
+        config.targetLocales.length > 0 ? config.targetLocales : yield* adapter.listLocales();
       const sourceLocale = config.sourceLocale;
       const targetLocales = locales.filter((l: string) => l !== sourceLocale);
 
@@ -41,22 +39,24 @@ export function runTranslation(config: TranslationRunConfig) {
 
           const translatedChunks: Record<string, string>[] = [];
 
-          yield* Effect.forEach(chunks, (chunkKeysArr) =>
-            Effect.gen(function* () {
-              const result = yield* config.strategy.translateChunk({
-                sourceLocale,
-                targetLocale: locale,
-                sourceMap,
-                targetMap,
-                keys: chunkKeysArr,
-              });
-              translatedChunks.push(result);
-            }).pipe(
-              Effect.catchAll((err) => {
-                failures.push(err);
-                return Effect.void;
-              }),
-            ),
+          yield* Effect.forEach(
+            chunks,
+            (chunkKeysArr) =>
+              Effect.gen(function* () {
+                const result = yield* config.strategy.translateChunk({
+                  sourceLocale,
+                  targetLocale: locale,
+                  sourceMap,
+                  targetMap,
+                  keys: chunkKeysArr,
+                });
+                translatedChunks.push(result);
+              }).pipe(
+                Effect.catchAll((err) => {
+                  failures.push(err);
+                  return Effect.void;
+                }),
+              ),
             { concurrency: config.chunking.concurrency, discard: true },
           );
 

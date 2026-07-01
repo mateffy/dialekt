@@ -2,12 +2,12 @@
 
 ## Tested Areas Map
 
-| Export | Test File | Status |
-|--------|-----------|--------|
-| `laravel()` adapter | `src/adapter.test.ts` | ✅ |
-| `renderPhpArray` / `renderPhpFile` | `src/php-array-writer.test.ts` | ✅ |
-| `listLaravelLocales` / `listLaravelResources` | `src/resources.test.ts` | ✅ |
-| `findUnusedLaravelKeys` | `src/unused-keys.test.ts` | ✅ |
+| Export                                        | Test File                      | Status |
+| --------------------------------------------- | ------------------------------ | ------ |
+| `laravel()` adapter                           | `src/adapter.test.ts`          | ✅     |
+| `renderPhpArray` / `renderPhpFile`            | `src/php-array-writer.test.ts` | ✅     |
+| `listLaravelLocales` / `listLaravelResources` | `src/resources.test.ts`        | ✅     |
+| `findUnusedLaravelKeys`                       | `src/unused-keys.test.ts`      | ✅     |
 
 ## Known Coverage Gaps
 

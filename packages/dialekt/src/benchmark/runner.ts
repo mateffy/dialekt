@@ -1,7 +1,7 @@
-import { Effect } from 'effect';
-import type { TranslationStrategy, TranslationContext } from '../translation/types.js';
-import type { StrategyBenchmarkSummary } from './metrics.js';
-import { runBenchmarkedChunk, summarizeBenchmarkResults } from './metrics.js';
+import { Effect } from "effect";
+import type { TranslationStrategy, TranslationContext } from "../translation/types.js";
+import type { StrategyBenchmarkSummary } from "./metrics.js";
+import { runBenchmarkedChunk, summarizeBenchmarkResults } from "./metrics.js";
 
 export interface BenchmarkConfig {
   readonly strategies: readonly TranslationStrategy[];

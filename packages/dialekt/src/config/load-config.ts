@@ -1,9 +1,9 @@
-import { createJiti } from 'jiti';
-import { Effect, Data } from 'effect';
-import { resolve } from 'node:path';
-import type { DialektConfig } from './types.js';
+import { createJiti } from "jiti";
+import { Effect, Data } from "effect";
+import { resolve } from "node:path";
+import type { DialektConfig } from "./types.js";
 
-export class ConfigLoadError extends Data.TaggedError('ConfigLoadError')<{
+export class ConfigLoadError extends Data.TaggedError("ConfigLoadError")<{
   readonly path: string;
   readonly cause: unknown;
 }> {}

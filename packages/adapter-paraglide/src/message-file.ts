@@ -1,6 +1,6 @@
-import { FileSystem, Path } from '@effect/platform';
-import { Effect } from 'effect';
-import { flattenObject, unflattenObject } from 'dialekt';
+import { FileSystem, Path } from "@effect/platform";
+import { Effect } from "effect";
+import { flattenObject, unflattenObject } from "dialekt";
 
 export interface MessageFileResult {
   readonly translations: Record<string, string>;
@@ -16,7 +16,7 @@ export function readMessageFile(
     if (!exists) {
       return { translations: {}, meta: {} };
     }
-    const content = yield* fs.readFileString(path).pipe(Effect.orElseSucceed(() => '{}'));
+    const content = yield* fs.readFileString(path).pipe(Effect.orElseSucceed(() => "{}"));
     const parsed = yield* Effect.try({
       try: () => JSON.parse(content) as Record<string, unknown>,
       catch: () => ({}),
@@ -26,14 +26,14 @@ export function readMessageFile(
     const translations: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(parsed)) {
-      if (key.startsWith('$')) {
+      if (key.startsWith("$")) {
         meta[key] = value;
-      } else if (typeof value === 'string') {
+      } else if (typeof value === "string") {
         translations[key] = value;
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
         const flattened = flattenObject(value as Record<string, unknown>);
         for (const [flatKey, flatValue] of Object.entries(flattened)) {
-          if (typeof flatValue === 'string') {
+          if (typeof flatValue === "string") {
             translations[`${key}.${flatKey}`] = flatValue;
           }
         }
@@ -61,8 +61,8 @@ export function writeMessageFile(
       output[key] = value;
     }
 
-    yield* fs.writeFileString(path, JSON.stringify(output, null, 2) + '\n').pipe(
-      Effect.orElseSucceed(() => undefined),
-    );
+    yield* fs
+      .writeFileString(path, JSON.stringify(output, null, 2) + "\n")
+      .pipe(Effect.orElseSucceed(() => undefined));
   });
 }

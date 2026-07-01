@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect } from "effect";
 
 export interface TranslationContext {
   readonly sourceLocale: string;
@@ -8,13 +8,13 @@ export interface TranslationContext {
   readonly keys: readonly string[]; // the specific keys to translate in this call
 }
 
-export class TranslationFailedError extends Data.TaggedError('TranslationFailedError')<{
+export class TranslationFailedError extends Data.TaggedError("TranslationFailedError")<{
   readonly keys: readonly string[];
   readonly cause: unknown;
 }> {}
 
 export interface TranslationStrategy {
-  readonly name: 'one-shot' | 'tool-loop-agent';
+  readonly name: "one-shot" | "tool-loop-agent";
   translateChunk(
     ctx: TranslationContext,
   ): Effect.Effect<Record<string, string>, TranslationFailedError>;

@@ -12,21 +12,21 @@
 
 // ─── Output format ──────────────────────────────────────────────────────────
 
-export type OutputFormat = 'pretty' | 'json';
+export type OutputFormat = "pretty" | "json";
 
 /**
  * Environment variables that signal dialekt is running inside an AI agent.
  * When any is set (truthy), or stdout is not a TTY, JSON mode is the default.
  */
 export const AGENT_ENV_VARS = [
-  'CLAUDE_CODE',
-  'CLAUDECODE',
-  'CURSOR',
-  'CURSOR_TRACE_ID',
-  'DEVIN',
-  'GEMINI_CLI',
-  'AGENT_TASK_ID',
-  'AIDER_CHAT',
+  "CLAUDE_CODE",
+  "CLAUDECODE",
+  "CURSOR",
+  "CURSOR_TRACE_ID",
+  "DEVIN",
+  "GEMINI_CLI",
+  "AGENT_TASK_ID",
+  "AIDER_CHAT",
 ] as const;
 
 /**
@@ -38,23 +38,23 @@ export const AGENT_ENV_VARS = [
  */
 export function detectFormat(explicit?: OutputFormat | undefined): OutputFormat {
   if (explicit !== undefined) return explicit;
-  if (!process.stdout.isTTY) return 'json';
-  if (AGENT_ENV_VARS.some((k) => process.env[k])) return 'json';
-  return 'pretty';
+  if (!process.stdout.isTTY) return "json";
+  if (AGENT_ENV_VARS.some((k) => process.env[k])) return "json";
+  return "pretty";
 }
 
 // ─── ANSI colours ────────────────────────────────────────────────────────────
 
 const C = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
 } as const;
 
 function isTty(): boolean {
@@ -64,7 +64,7 @@ function isTty(): boolean {
 /** Wraps text in ANSI codes only when stdout is a TTY; otherwise returns it bare. */
 export function color(text: string, ...codes: string[]): string {
   if (!isTty()) return text;
-  return `${codes.join('')}${text}${C.reset}`;
+  return `${codes.join("")}${text}${C.reset}`;
 }
 
 // ─── Box-drawing glyphs ──────────────────────────────────────────────────────
@@ -91,39 +91,39 @@ interface Glyphs {
 const PRETTY_GLYPHS: Glyphs = {
   hLine: String.fromCharCode(0x2500),
   vLine: String.fromCharCode(0x2502),
-  cornerTL: String.fromCharCode(0x250C),
+  cornerTL: String.fromCharCode(0x250c),
   cornerTR: String.fromCharCode(0x2510),
   cornerBL: String.fromCharCode(0x2514),
   cornerBR: String.fromCharCode(0x2518),
-  teeRight: String.fromCharCode(0x251C),
+  teeRight: String.fromCharCode(0x251c),
   teeLeft: String.fromCharCode(0x2524),
-  teeDown: String.fromCharCode(0x252C),
+  teeDown: String.fromCharCode(0x252c),
   teeUp: String.fromCharCode(0x2534),
-  cross: String.fromCharCode(0x253C),
+  cross: String.fromCharCode(0x253c),
   bullet: String.fromCharCode(0x2022),
   arrow: String.fromCharCode(0x2192),
   check: String.fromCharCode(0x2713),
   crossMark: String.fromCharCode(0x2717),
-  warn: String.fromCharCode(0x26A0),
+  warn: String.fromCharCode(0x26a0),
 };
 
 const ASCII_GLYPHS: Glyphs = {
-  hLine: '-',
-  vLine: '|',
-  cornerTL: '+',
-  cornerTR: '+',
-  cornerBL: '+',
-  cornerBR: '+',
-  teeRight: '+',
-  teeLeft: '+',
-  teeDown: '+',
-  teeUp: '+',
-  cross: '+',
-  bullet: '*',
-  arrow: '>',
-  check: '+',
-  crossMark: 'x',
-  warn: '!',
+  hLine: "-",
+  vLine: "|",
+  cornerTL: "+",
+  cornerTR: "+",
+  cornerBL: "+",
+  cornerBR: "+",
+  teeRight: "+",
+  teeLeft: "+",
+  teeDown: "+",
+  teeUp: "+",
+  cross: "+",
+  bullet: "*",
+  arrow: ">",
+  check: "+",
+  crossMark: "x",
+  warn: "!",
 };
 
 export function glyphs(): Glyphs {
@@ -134,38 +134,35 @@ export function glyphs(): Glyphs {
 
 export function drawTable(
   headers: readonly string[],
-  rows: readonly (readonly string[])[]
+  rows: readonly (readonly string[])[],
 ): string {
   const g = glyphs();
   const colWidths = headers.map((h, i) =>
-    Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length))
+    Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)),
   );
 
   const pad = (text: string, width: number) => text.padEnd(width);
 
-  const hLine = g.cornerTL +
-    colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeDown) +
-    g.cornerTR;
+  const hLine =
+    g.cornerTL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeDown) + g.cornerTR;
 
-  const headerRow = g.vLine +
+  const headerRow =
+    g.vLine +
     headers.map((h, i) => ` ${color(pad(h, colWidths[i]!), C.bold)} `).join(g.vLine) +
     g.vLine;
 
-  const separator = g.teeRight +
-    colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.cross) +
-    g.teeLeft;
+  const separator =
+    g.teeRight + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.cross) + g.teeLeft;
 
-  const dataRows = rows.map((row) =>
-    g.vLine +
-    row.map((cell, i) => ` ${pad(cell, colWidths[i]!)} `).join(g.vLine) +
-    g.vLine
+  const dataRows = rows.map(
+    (row) =>
+      g.vLine + row.map((cell, i) => ` ${pad(cell, colWidths[i]!)} `).join(g.vLine) + g.vLine,
   );
 
-  const bottomLine = g.cornerBL +
-    colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeUp) +
-    g.cornerBR;
+  const bottomLine =
+    g.cornerBL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeUp) + g.cornerBR;
 
-  return [hLine, headerRow, separator, ...dataRows, bottomLine].join('\n');
+  return [hLine, headerRow, separator, ...dataRows, bottomLine].join("\n");
 }
 
 // ─── Banner / header helpers ─────────────────────────────────────────────────

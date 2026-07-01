@@ -1,5 +1,5 @@
-import { NodeContext } from '@effect/platform-node';
-import { Layer } from 'effect';
+import { NodeContext } from "@effect/platform-node";
+import { Layer } from "effect";
 
 /**
  * The only file in this package (besides cli/main.ts) permitted to know

@@ -1,4 +1,4 @@
-import type { TranslationAdapter } from '../adapter/types.js';
+import type { TranslationAdapter } from "../adapter/types.js";
 
 export interface ModelConfig {
   readonly provider: string;
@@ -19,7 +19,7 @@ export interface RetryConfig {
 export interface DialektConfig {
   readonly sourceLocale: string;
   readonly targetLocales: readonly string[] | null;
-  readonly strategy: 'one-shot' | 'tool-loop-agent';
+  readonly strategy: "one-shot" | "tool-loop-agent";
   readonly model: ModelConfig;
   readonly fastModel: ModelConfig;
   readonly chunking: ChunkingConfig;

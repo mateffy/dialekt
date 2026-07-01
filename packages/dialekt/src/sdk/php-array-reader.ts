@@ -1,8 +1,8 @@
-import { Command } from '@effect/platform';
-import type { CommandExecutor } from '@effect/platform/CommandExecutor';
-import { Effect, Data } from 'effect';
+import { Command } from "@effect/platform";
+import type { CommandExecutor } from "@effect/platform/CommandExecutor";
+import { Effect, Data } from "effect";
 
-export class PhpExecutionError extends Data.TaggedError('PhpExecutionError')<{
+export class PhpExecutionError extends Data.TaggedError("PhpExecutionError")<{
   readonly path: string;
   readonly cause: unknown;
 }> {}
@@ -14,7 +14,7 @@ export function readPhpArrayAsJson(
   absolutePath: string,
 ): Effect.Effect<Record<string, unknown>, PhpExecutionError, CommandExecutor> {
   return Effect.gen(function* () {
-    const cmd = Command.make('php', '-r', DUMP_SCRIPT, '--', absolutePath);
+    const cmd = Command.make("php", "-r", DUMP_SCRIPT, "--", absolutePath);
     const output = yield* Command.string(cmd).pipe(
       Effect.mapError((cause) => new PhpExecutionError({ path: absolutePath, cause })),
     );

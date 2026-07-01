@@ -16,18 +16,18 @@ import {
   warning,
   info,
   keyValue,
-} from './format.js';
-import type { OutputFormat } from './format.js';
+} from "./format.js";
+import type { OutputFormat } from "./format.js";
 
 const C = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m',
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
 } as const;
 
 // ─── Missing keys formatter ──────────────────────────────────────────────────
@@ -43,12 +43,12 @@ export function formatMissingKeys(
   entries: readonly MissingKeyEntry[],
   format: OutputFormat,
 ): string {
-  if (format === 'json') {
-    return JSON.stringify(entries, null, 2) + '\n';
+  if (format === "json") {
+    return JSON.stringify(entries, null, 2) + "\n";
   }
 
   if (entries.length === 0) {
-    return success('All translations are complete. No missing keys.') + '\n';
+    return success("All translations are complete. No missing keys.") + "\n";
   }
 
   const grouped = new Map<string, Map<string, Map<string, string[]>>>();
@@ -78,7 +78,9 @@ export function formatMissingKeys(
     for (const [locale, byResource] of byLocale) {
       let localeTotal = 0;
       for (const keys of byResource.values()) localeTotal += keys.length;
-      lines.push(`    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`);
+      lines.push(
+        `    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`,
+      );
 
       for (const [resource, keys] of byResource) {
         lines.push(`      ${color(resource, C.bold)}`);
@@ -89,7 +91,7 @@ export function formatMissingKeys(
     }
   }
 
-  return lines.join('\n') + '\n';
+  return lines.join("\n") + "\n";
 }
 
 // ─── Unused keys formatter ───────────────────────────────────────────────────
@@ -101,16 +103,13 @@ export interface UnusedKeyEntry {
   readonly key: string;
 }
 
-export function formatUnusedKeys(
-  entries: readonly UnusedKeyEntry[],
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify(entries, null, 2) + '\n';
+export function formatUnusedKeys(entries: readonly UnusedKeyEntry[], format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(entries, null, 2) + "\n";
   }
 
   if (entries.length === 0) {
-    return success('All keys are referenced in source files. No unused keys.') + '\n';
+    return success("All keys are referenced in source files. No unused keys.") + "\n";
   }
 
   const grouped = new Map<string, Map<string, Map<string, string[]>>>();
@@ -140,7 +139,9 @@ export function formatUnusedKeys(
     for (const [locale, byResource] of byLocale) {
       let localeTotal = 0;
       for (const keys of byResource.values()) localeTotal += keys.length;
-      lines.push(`    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`);
+      lines.push(
+        `    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`,
+      );
 
       for (const [resource, keys] of byResource) {
         lines.push(`      ${color(resource, C.bold)}`);
@@ -151,7 +152,7 @@ export function formatUnusedKeys(
     }
   }
 
-  return lines.join('\n') + '\n';
+  return lines.join("\n") + "\n";
 }
 
 // ─── Validate formatter ──────────────────────────────────────────────────────
@@ -168,33 +169,27 @@ export interface ValidateResult {
   readonly entries: readonly ValidateEntry[];
 }
 
-export function formatValidate(
-  result: ValidateResult,
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify(result, null, 2) + '\n';
+export function formatValidate(result: ValidateResult, format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2) + "\n";
   }
 
   if (result.passing) {
-    return '\n' + success('All translations are up to date.') + '\n';
+    return "\n" + success("All translations are up to date.") + "\n";
   }
 
-  const rows = result.entries.map((e) => [
-    e.adapter,
-    e.locale,
-    e.resource,
-    e.count.toString(),
-  ]);
+  const rows = result.entries.map((e) => [e.adapter, e.locale, e.resource, e.count.toString()]);
 
   const lines: string[] = [];
   lines.push(failure(`Missing keys found in ${result.entries.length} resource(s)`));
-  lines.push('');
-  lines.push(drawTable(['Adapter', 'Locale', 'Resource', 'Missing'], rows));
-  lines.push('');
-  lines.push(color(`Run ${color('dialekt translate', C.bold + C.cyan)} to fill missing keys.`, C.dim));
+  lines.push("");
+  lines.push(drawTable(["Adapter", "Locale", "Resource", "Missing"], rows));
+  lines.push("");
+  lines.push(
+    color(`Run ${color("dialekt translate", C.bold + C.cyan)} to fill missing keys.`, C.dim),
+  );
 
-  return lines.join('\n') + '\n';
+  return lines.join("\n") + "\n";
 }
 
 // ─── Languages formatter ─────────────────────────────────────────────────────
@@ -204,16 +199,13 @@ export interface LanguageEntry {
   readonly locales: readonly string[];
 }
 
-export function formatLanguages(
-  entries: readonly LanguageEntry[],
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify(entries, null, 2) + '\n';
+export function formatLanguages(entries: readonly LanguageEntry[], format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(entries, null, 2) + "\n";
   }
 
   if (entries.length === 0) {
-    return warning('No adapters configured.') + '\n';
+    return warning("No adapters configured.") + "\n";
   }
 
   const lines: string[] = [];
@@ -221,10 +213,10 @@ export function formatLanguages(
 
   for (const e of entries) {
     lines.push(`  ${color(e.adapter, C.bold + C.blue)}`);
-    lines.push(`    ${color(`${g.arrow}`, C.dim)} ${e.locales.join(color(', ', C.dim))}`);
+    lines.push(`    ${color(`${g.arrow}`, C.dim)} ${e.locales.join(color(", ", C.dim))}`);
   }
 
-  return lines.join('\n') + '\n';
+  return lines.join("\n") + "\n";
 }
 
 // ─── Translate formatter ─────────────────────────────────────────────────────
@@ -239,26 +231,23 @@ export interface TranslateResult {
   };
 }
 
-export function formatTranslate(
-  result: TranslateResult,
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify(result, null, 2) + '\n';
+export function formatTranslate(result: TranslateResult, format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2) + "\n";
   }
 
   if (result.success) {
     const lines: string[] = [success(result.message)];
     if (result.stats) {
-      lines.push('');
-      lines.push(keyValue('Adapters:', result.stats.adaptersProcessed.toString()));
-      lines.push(keyValue('Locales:', result.stats.localesTranslated.toString()));
-      lines.push(keyValue('Keys:', result.stats.keysTranslated.toString()));
+      lines.push("");
+      lines.push(keyValue("Adapters:", result.stats.adaptersProcessed.toString()));
+      lines.push(keyValue("Locales:", result.stats.localesTranslated.toString()));
+      lines.push(keyValue("Keys:", result.stats.keysTranslated.toString()));
     }
-    return lines.join('\n') + '\n';
+    return lines.join("\n") + "\n";
   }
 
-  return failure(result.message) + '\n';
+  return failure(result.message) + "\n";
 }
 
 // ─── Add formatter ───────────────────────────────────────────────────────────
@@ -269,27 +258,24 @@ export interface AddResult {
   readonly addedResources?: readonly string[];
 }
 
-export function formatAdd(
-  result: AddResult,
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify(result, null, 2) + '\n';
+export function formatAdd(result: AddResult, format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2) + "\n";
   }
 
   if (result.success) {
     const lines: string[] = [success(result.message)];
     if (result.addedResources && result.addedResources.length > 0) {
-      lines.push('');
-      lines.push(color('Added to:', C.dim));
+      lines.push("");
+      lines.push(color("Added to:", C.dim));
       for (const r of result.addedResources) {
         lines.push(`  ${color(glyphs().bullet, C.dim)} ${r}`);
       }
     }
-    return lines.join('\n') + '\n';
+    return lines.join("\n") + "\n";
   }
 
-  return failure(result.message) + '\n';
+  return failure(result.message) + "\n";
 }
 
 // ─── Benchmark formatter ─────────────────────────────────────────────────────
@@ -304,21 +290,18 @@ export interface BenchmarkEntry {
   readonly totalAttempts: number;
 }
 
-export function formatBenchmark(
-  entries: readonly BenchmarkEntry[],
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify(entries, null, 2) + '\n';
+export function formatBenchmark(entries: readonly BenchmarkEntry[], format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(entries, null, 2) + "\n";
   }
 
   if (entries.length === 0) {
-    return warning('No benchmark data available.') + '\n';
+    return warning("No benchmark data available.") + "\n";
   }
 
   const lines: string[] = [];
 
-  lines.push(banner('Benchmark Results'));
+  lines.push(banner("Benchmark Results"));
 
   const rows = entries.map((e) => [
     e.strategyName,
@@ -328,23 +311,17 @@ export function formatBenchmark(
     e.totalAttempts.toString(),
   ]);
 
-  lines.push('');
-  lines.push(drawTable(
-    ['Strategy', 'Chunks', 'Total', 'Avg/Chunk', 'Attempts'],
-    rows,
-  ));
+  lines.push("");
+  lines.push(drawTable(["Strategy", "Chunks", "Total", "Avg/Chunk", "Attempts"], rows));
 
-  return lines.join('\n') + '\n';
+  return lines.join("\n") + "\n";
 }
 
 // ─── Error formatter ─────────────────────────────────────────────────────────
 
-export function formatError(
-  message: string,
-  format: OutputFormat,
-): string {
-  if (format === 'json') {
-    return JSON.stringify({ error: message }, null, 2) + '\n';
+export function formatError(message: string, format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify({ error: message }, null, 2) + "\n";
   }
-  return failure(message) + '\n';
+  return failure(message) + "\n";
 }

@@ -2,11 +2,11 @@
 
 ## Tested Areas Map
 
-| Export | Test File | Status |
-|--------|-----------|--------|
-| `paraglide()` adapter | `src/adapter.test.ts` | ✅ |
-| `readMessageFile` / `writeMessageFile` | `src/message-file.test.ts` | ✅ |
-| `findUnusedParaglideKeys` | `src/unused-keys.test.ts` | ✅ |
+| Export                                 | Test File                  | Status |
+| -------------------------------------- | -------------------------- | ------ |
+| `paraglide()` adapter                  | `src/adapter.test.ts`      | ✅     |
+| `readMessageFile` / `writeMessageFile` | `src/message-file.test.ts` | ✅     |
+| `findUnusedParaglideKeys`              | `src/unused-keys.test.ts`  | ✅     |
 
 ## Known Coverage Gaps
 

@@ -1,19 +1,14 @@
-import { Effect } from 'effect';
-import { Path } from '@effect/platform/Path';
-import { FileSystem } from '@effect/platform/FileSystem';
-import type {
-  ResourceRef,
-  TranslationAdapter,
-  AdapterReadError,
-  AdapterWriteError,
-} from 'dialekt';
+import { Effect } from "effect";
+import { Path } from "@effect/platform/Path";
+import { FileSystem } from "@effect/platform/FileSystem";
+import type { ResourceRef, TranslationAdapter, AdapterReadError, AdapterWriteError } from "dialekt";
 import {
   AdapterReadError as AdapterReadErrorClass,
   AdapterWriteError as AdapterWriteErrorClass,
   NodePlatformLayer,
-} from 'dialekt';
-import { readMessageFile, writeMessageFile } from './message-file.js';
-import { findUnusedParaglideKeys } from './unused-keys.js';
+} from "dialekt";
+import { readMessageFile, writeMessageFile } from "./message-file.js";
+import { findUnusedParaglideKeys } from "./unused-keys.js";
 
 export interface ParaglideAdapterOptions {
   readonly messagesDir: string;
@@ -24,7 +19,7 @@ export function paraglide(options: ParaglideAdapterOptions): TranslationAdapter 
   const { messagesDir, scanPaths = [] } = options;
 
   return {
-    name: 'paraglide',
+    name: "paraglide",
     capabilities: {
       canCreateResource: true,
       unusedKeyDetection: true,
@@ -36,13 +31,13 @@ export function paraglide(options: ParaglideAdapterOptions): TranslationAdapter 
         const path = yield* Path;
         const exists = yield* fs.exists(messagesDir).pipe(Effect.orElseSucceed(() => false));
         if (!exists) return [];
-        const entries = yield* fs.readDirectory(messagesDir).pipe(
-          Effect.orElseSucceed(() => [] as string[]),
-        );
+        const entries = yield* fs
+          .readDirectory(messagesDir)
+          .pipe(Effect.orElseSucceed(() => [] as string[]));
         const locales: string[] = [];
         for (const entry of entries) {
-          if (entry.endsWith('.json')) {
-            locales.push(entry.replace(/\.json$/, ''));
+          if (entry.endsWith(".json")) {
+            locales.push(entry.replace(/\.json$/, ""));
           }
         }
         return locales;
@@ -50,17 +45,16 @@ export function paraglide(options: ParaglideAdapterOptions): TranslationAdapter 
         Effect.mapError(
           (cause) =>
             new AdapterReadErrorClass({
-              adapter: 'paraglide',
-              locale: '',
-              resource: '',
+              adapter: "paraglide",
+              locale: "",
+              resource: "",
               cause,
             }) as AdapterReadError,
         ),
         Effect.provide([NodePlatformLayer]),
       ) as Effect.Effect<readonly string[], AdapterReadError, never>,
 
-    listResources: () =>
-      Effect.succeed([{ key: 'messages', label: 'messages' }]),
+    listResources: () => Effect.succeed([{ key: "messages", label: "messages" }]),
 
     readResource: (locale, resource) =>
       Effect.gen(function* () {
@@ -70,7 +64,7 @@ export function paraglide(options: ParaglideAdapterOptions): TranslationAdapter 
           Effect.mapError(
             (cause) =>
               new AdapterReadErrorClass({
-                adapter: 'paraglide',
+                adapter: "paraglide",
                 locale,
                 resource: resource.key,
                 cause,
@@ -78,21 +72,27 @@ export function paraglide(options: ParaglideAdapterOptions): TranslationAdapter 
           ),
         );
         return result.translations;
-      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<Record<string, string>, AdapterReadError, never>,
+      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<
+        Record<string, string>,
+        AdapterReadError,
+        never
+      >,
 
     writeResource: (locale, resource, entries) =>
       Effect.gen(function* () {
         const path = yield* Path;
         const filePath = path.join(messagesDir, `${locale}.json`);
-        const existing = yield* readMessageFile(filePath).pipe(Effect.orElseSucceed(() => ({
-          translations: {},
-          meta: {},
-        })));
+        const existing = yield* readMessageFile(filePath).pipe(
+          Effect.orElseSucceed(() => ({
+            translations: {},
+            meta: {},
+          })),
+        );
         yield* writeMessageFile(filePath, entries, existing.meta).pipe(
           Effect.mapError(
             (cause) =>
               new AdapterWriteErrorClass({
-                adapter: 'paraglide',
+                adapter: "paraglide",
                 locale,
                 resource: resource.key,
                 cause,
@@ -105,12 +105,16 @@ export function paraglide(options: ParaglideAdapterOptions): TranslationAdapter 
       Effect.gen(function* () {
         const path = yield* Path;
         const adapterScanPaths =
-          scanPaths.length > 0 ? scanPaths : [path.resolve(messagesDir, '..')];
+          scanPaths.length > 0 ? scanPaths : [path.resolve(messagesDir, "..")];
         const keys = yield* Effect.gen(function* () {
           const map = yield* paraglide(options).readResource(locale, resource);
           return Object.keys(map);
         });
         return yield* findUnusedParaglideKeys(adapterScanPaths, keys);
-      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<readonly string[], AdapterReadError, never>,
+      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<
+        readonly string[],
+        AdapterReadError,
+        never
+      >,
   };
 }

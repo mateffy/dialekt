@@ -1,28 +1,28 @@
-import { describe, expect, it } from 'vitest';
-import { Effect, Either } from 'effect';
-import { MockLanguageModelV3 } from 'ai/test';
-import { createOneShotStrategy } from './one-shot-strategy.js';
-import { TranslationFailedError } from './types.js';
+import { describe, expect, it } from "vitest";
+import { Effect, Either } from "effect";
+import { MockLanguageModelV3 } from "ai/test";
+import { createOneShotStrategy } from "./one-shot-strategy.js";
+import { TranslationFailedError } from "./types.js";
 
-describe('createOneShotStrategy', () => {
-  it('returns translated map on success', async () => {
+describe("createOneShotStrategy", () => {
+  it("returns translated map on success", async () => {
     const model = new MockLanguageModelV3({
       doGenerate: async (options: { prompt: unknown }) => {
         return {
-          text: '',
+          text: "",
           content: [
             {
-              type: 'text',
-              text: JSON.stringify({ hello: 'Hallo', bye: 'Tschüss' }),
+              type: "text",
+              text: JSON.stringify({ hello: "Hallo", bye: "Tschüss" }),
             },
           ],
-          finishReason: { unified: 'stop' as const, raw: 'stop' },
+          finishReason: { unified: "stop" as const, raw: "stop" },
           usage: {
             inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
             outputTokens: { total: 4, text: 4, reasoning: 0 },
           },
           response: {
-            modelId: 'mock',
+            modelId: "mock",
             timestamp: new Date(),
           },
           request: { body: {} },
@@ -37,37 +37,37 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
-      sourceMap: { hello: 'Hello', bye: 'Bye' },
+      sourceLocale: "en",
+      targetLocale: "de",
+      sourceMap: { hello: "Hello", bye: "Bye" },
       targetMap: {},
-      keys: ['hello', 'bye'],
+      keys: ["hello", "bye"],
     };
 
     const result = await Effect.runPromise(strategy.translateChunk(ctx));
-    expect(result).toEqual({ hello: 'Hallo', bye: 'Tschüss' });
+    expect(result).toEqual({ hello: "Hallo", bye: "Tschüss" });
   });
 
-  it('retries when model omits a key and fails after exhaustion', async () => {
+  it("retries when model omits a key and fails after exhaustion", async () => {
     let calls = 0;
     const model = new MockLanguageModelV3({
       doGenerate: async () => {
         calls++;
         return {
-          text: '',
+          text: "",
           content: [
             {
-              type: 'text',
-              text: JSON.stringify({ hello: 'Hallo' }),
+              type: "text",
+              text: JSON.stringify({ hello: "Hallo" }),
             },
           ],
-          finishReason: { unified: 'stop' as const, raw: 'stop' },
+          finishReason: { unified: "stop" as const, raw: "stop" },
           usage: {
             inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
             outputTokens: { total: 2, text: 2, reasoning: 0 },
           },
           response: {
-            modelId: 'mock',
+            modelId: "mock",
             timestamp: new Date(),
           },
           request: { body: {} },
@@ -82,30 +82,35 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
-      sourceMap: { hello: 'Hello', bye: 'Bye' },
+      sourceLocale: "en",
+      targetLocale: "de",
+      sourceMap: { hello: "Hello", bye: "Bye" },
       targetMap: {},
-      keys: ['hello', 'bye'],
+      keys: ["hello", "bye"],
     };
 
-    const exit = await Effect.runPromise(Effect.either(strategy.translateChunk(ctx))) as Either.Either<unknown, TranslationFailedError>;
+    const exit = (await Effect.runPromise(
+      Effect.either(strategy.translateChunk(ctx)),
+    )) as Either.Either<unknown, TranslationFailedError>;
     expect(calls).toBeGreaterThan(1);
-    if (exit._tag === 'Left') {
-      expect(exit.left._tag).toBe('TranslationFailedError');
+    if (exit._tag === "Left") {
+      expect(exit.left._tag).toBe("TranslationFailedError");
     } else {
-      throw new Error('Expected Left');
+      throw new Error("Expected Left");
     }
   });
 
-  it('handles empty keys', async () => {
+  it("handles empty keys", async () => {
     const model = new MockLanguageModelV3({
       doGenerate: async () => ({
-        text: '',
-        content: [{ type: 'text', text: JSON.stringify({}) }],
-        finishReason: { unified: 'stop' as const, raw: 'stop' },
-        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
-        response: { modelId: 'mock', timestamp: new Date() },
+        text: "",
+        content: [{ type: "text", text: JSON.stringify({}) }],
+        finishReason: { unified: "stop" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        response: { modelId: "mock", timestamp: new Date() },
         request: { body: {} },
         warnings: [],
       }),
@@ -117,8 +122,8 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
+      sourceLocale: "en",
+      targetLocale: "de",
       sourceMap: {},
       targetMap: {},
       keys: [],
@@ -128,17 +133,20 @@ describe('createOneShotStrategy', () => {
     expect(result).toEqual({});
   });
 
-  it('handles malformed JSON response by retrying', async () => {
+  it("handles malformed JSON response by retrying", async () => {
     let calls = 0;
     const model = new MockLanguageModelV3({
       doGenerate: async () => {
         calls++;
         return {
-          text: '',
-          content: [{ type: 'text', text: calls < 2 ? 'not-json' : JSON.stringify({ k: 'v' }) }],
-          finishReason: { unified: 'stop' as const, raw: 'stop' },
-          usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
-          response: { modelId: 'mock', timestamp: new Date() },
+          text: "",
+          content: [{ type: "text", text: calls < 2 ? "not-json" : JSON.stringify({ k: "v" }) }],
+          finishReason: { unified: "stop" as const, raw: "stop" },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1, text: 1, reasoning: 0 },
+          },
+          response: { modelId: "mock", timestamp: new Date() },
           request: { body: {} },
           warnings: [],
         };
@@ -151,26 +159,29 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
-      sourceMap: { k: 'K' },
+      sourceLocale: "en",
+      targetLocale: "de",
+      sourceMap: { k: "K" },
       targetMap: {},
-      keys: ['k'],
+      keys: ["k"],
     };
 
     const result = await Effect.runPromise(strategy.translateChunk(ctx));
-    expect(result).toEqual({ k: 'v' });
+    expect(result).toEqual({ k: "v" });
     expect(calls).toBeGreaterThan(1);
   });
 
-  it('fails after all retries exhausted', async () => {
+  it("fails after all retries exhausted", async () => {
     const model = new MockLanguageModelV3({
       doGenerate: async () => ({
-        text: '',
-        content: [{ type: 'text', text: 'not-json' }],
-        finishReason: { unified: 'stop' as const, raw: 'stop' },
-        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
-        response: { modelId: 'mock', timestamp: new Date() },
+        text: "",
+        content: [{ type: "text", text: "not-json" }],
+        finishReason: { unified: "stop" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        response: { modelId: "mock", timestamp: new Date() },
         request: { body: {} },
         warnings: [],
       }),
@@ -182,29 +193,34 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
-      sourceMap: { k: 'K' },
+      sourceLocale: "en",
+      targetLocale: "de",
+      sourceMap: { k: "K" },
       targetMap: {},
-      keys: ['k'],
+      keys: ["k"],
     };
 
-    const exit = await Effect.runPromise(Effect.either(strategy.translateChunk(ctx))) as Either.Either<unknown, TranslationFailedError>;
-    if (exit._tag === 'Left') {
-      expect(exit.left._tag).toBe('TranslationFailedError');
+    const exit = (await Effect.runPromise(
+      Effect.either(strategy.translateChunk(ctx)),
+    )) as Either.Either<unknown, TranslationFailedError>;
+    if (exit._tag === "Left") {
+      expect(exit.left._tag).toBe("TranslationFailedError");
     } else {
-      throw new Error('Expected Left');
+      throw new Error("Expected Left");
     }
   });
 
-  it('handles model returning extra keys (ignores them)', async () => {
+  it("handles model returning extra keys (ignores them)", async () => {
     const model = new MockLanguageModelV3({
       doGenerate: async () => ({
-        text: '',
-        content: [{ type: 'text', text: JSON.stringify({ hello: 'Hallo', extra: 'ignored' }) }],
-        finishReason: { unified: 'stop' as const, raw: 'stop' },
-        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
-        response: { modelId: 'mock', timestamp: new Date() },
+        text: "",
+        content: [{ type: "text", text: JSON.stringify({ hello: "Hallo", extra: "ignored" }) }],
+        finishReason: { unified: "stop" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        response: { modelId: "mock", timestamp: new Date() },
         request: { body: {} },
         warnings: [],
       }),
@@ -216,25 +232,28 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
-      sourceMap: { hello: 'Hello' },
+      sourceLocale: "en",
+      targetLocale: "de",
+      sourceMap: { hello: "Hello" },
       targetMap: {},
-      keys: ['hello'],
+      keys: ["hello"],
     };
 
     const result = await Effect.runPromise(strategy.translateChunk(ctx));
-    expect(result).toEqual({ hello: 'Hallo' });
+    expect(result).toEqual({ hello: "Hallo" });
   });
 
-  it('handles single key translation', async () => {
+  it("handles single key translation", async () => {
     const model = new MockLanguageModelV3({
       doGenerate: async () => ({
-        text: '',
-        content: [{ type: 'text', text: JSON.stringify({ greeting: 'Hallo' }) }],
-        finishReason: { unified: 'stop' as const, raw: 'stop' },
-        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
-        response: { modelId: 'mock', timestamp: new Date() },
+        text: "",
+        content: [{ type: "text", text: JSON.stringify({ greeting: "Hallo" }) }],
+        finishReason: { unified: "stop" as const, raw: "stop" },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        response: { modelId: "mock", timestamp: new Date() },
         request: { body: {} },
         warnings: [],
       }),
@@ -246,14 +265,14 @@ describe('createOneShotStrategy', () => {
     });
 
     const ctx = {
-      sourceLocale: 'en',
-      targetLocale: 'de',
-      sourceMap: { greeting: 'Hello' },
+      sourceLocale: "en",
+      targetLocale: "de",
+      sourceMap: { greeting: "Hello" },
       targetMap: {},
-      keys: ['greeting'],
+      keys: ["greeting"],
     };
 
     const result = await Effect.runPromise(strategy.translateChunk(ctx));
-    expect(result).toEqual({ greeting: 'Hallo' });
+    expect(result).toEqual({ greeting: "Hallo" });
   });
 });

@@ -1,15 +1,16 @@
-import { defineArchitecture } from 'gesetz';
+import { defineArchitecture } from "gesetz";
 
 export const layers = defineArchitecture({
   layers: [
-    { name: 'core', pattern: 'packages/dialekt/src/**/*', canImportFrom: [] },
-    { name: 'adapters', pattern: 'packages/adapter-*/src/**/*', canImportFrom: ['core'] },
+    { name: "core", pattern: "packages/dialekt/src/**/*", canImportFrom: [] },
+    { name: "adapters", pattern: "packages/adapter-*/src/**/*", canImportFrom: ["core"] },
   ],
   forbidden: [
     {
-      from: 'core',
-      to: 'adapters',
-      message: 'core must never import from adapter packages — adapters depend on core, not the reverse.',
+      from: "core",
+      to: "adapters",
+      message:
+        "core must never import from adapter packages — adapters depend on core, not the reverse.",
     },
   ],
 });

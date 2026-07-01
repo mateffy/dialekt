@@ -1,8 +1,8 @@
-import { Effect } from 'effect';
-import type { TranslationStrategy, TranslationContext } from '../translation/types.js';
+import { Effect } from "effect";
+import type { TranslationStrategy, TranslationContext } from "../translation/types.js";
 
 export interface ChunkBenchmarkResult {
-  readonly strategyName: 'one-shot' | 'tool-loop-agent';
+  readonly strategyName: "one-shot" | "tool-loop-agent";
   readonly chunkKeyCount: number;
   readonly durationMs: number;
   readonly attemptCount: number;
@@ -11,7 +11,7 @@ export interface ChunkBenchmarkResult {
 }
 
 export interface StrategyBenchmarkSummary {
-  readonly strategyName: 'one-shot' | 'tool-loop-agent';
+  readonly strategyName: "one-shot" | "tool-loop-agent";
   readonly totalChunks: number;
   readonly succeededChunks: number;
   readonly failedChunks: number;
@@ -29,7 +29,7 @@ export function summarizeBenchmarkResults(
   const totalDurationMs = results.reduce((sum, r) => sum + r.durationMs, 0);
   const totalAttempts = results.reduce((sum, r) => sum + r.attemptCount, 0);
   return {
-    strategyName: results[0]?.strategyName ?? 'one-shot',
+    strategyName: results[0]?.strategyName ?? "one-shot",
     totalChunks,
     succeededChunks,
     failedChunks,
@@ -47,7 +47,7 @@ export function runBenchmarkedChunk(
     const start = Date.now();
     const result = yield* Effect.either(strategy.translateChunk(ctx));
     const durationMs = Date.now() - start;
-    if (result._tag === 'Right') {
+    if (result._tag === "Right") {
       return {
         strategyName: strategy.name,
         chunkKeyCount: ctx.keys.length,

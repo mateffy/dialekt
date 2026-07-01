@@ -1,10 +1,10 @@
 {
   "name": "dialekt",
   "version": "0.1.0",
-  "type": "module",
   "bin": {
     "dialekt": "./dist/cli/main.mjs"
   },
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -20,11 +20,11 @@
     "@ai-sdk/anthropic": "^4.0.4",
     "@ai-sdk/google": "^4.0.3",
     "@ai-sdk/openai": "^4.0.4",
-    "dialekt": "link:",
     "@effect/cli": "^0.75.0",
     "@effect/platform": "^0.96.0",
     "@effect/platform-node": "^0.107.0",
     "ai": "^7.0.0",
+    "dialekt": "link:",
     "effect": "^3.21.0",
     "jiti": "^2.7.0",
     "zod": "^3.24.0"
