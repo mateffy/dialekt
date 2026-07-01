@@ -12,7 +12,7 @@ export interface MissingFlags {
   readonly adapter: Option.Option<string>;
   readonly baseLanguage: Option.Option<string>;
   readonly language: Option.Option<string>;
-  readonly format: Option.Option<string>;
+  readonly format?: Option.Option<string>;
 }
 
 export interface MissingKeysEntry {
@@ -69,7 +69,9 @@ export function runMissing(
     }
 
     const format = detectFormat(
-      Option.getOrUndefined(flags.format) as OutputFormat | undefined,
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
     );
 
     yield* logger(formatMissingKeys(allEntries, format));

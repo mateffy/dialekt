@@ -12,7 +12,7 @@ export interface ValidateFlags {
   readonly adapter: Option.Option<string>;
   readonly baseLanguage: Option.Option<string>;
   readonly language: Option.Option<string>;
-  readonly format: Option.Option<string>;
+  readonly format?: Option.Option<string>;
 }
 
 export interface MissingEntry {
@@ -67,7 +67,9 @@ export function runValidate(
     }
 
     const format = detectFormat(
-      Option.getOrUndefined(flags.format) as OutputFormat | undefined,
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
     );
 
     const passing = entries.length === 0;

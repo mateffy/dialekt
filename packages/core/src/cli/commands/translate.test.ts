@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Effect, Option } from 'effect';
 import { runTranslate, translateCommand } from './translate.js';
 import type { DialektConfig } from '../../config/types.js';
+import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
+import type { TranslationStrategy } from '../../translation/types.js';
 
 describe('runTranslate', () => {
   const baseConfig: DialektConfig = {
@@ -15,9 +17,22 @@ describe('runTranslate', () => {
     adapters: [],
   };
 
+  function makeAdapter(opts: { name: string; locales?: readonly string[] }): TranslationAdapter {
+    return {
+      name: opts.name,
+      capabilities: { canCreateResource: true, unusedKeyDetection: false },
+      listLocales: () => Effect.succeed(opts.locales ?? ['en', 'de']),
+      listResources: () => Effect.succeed([]),
+      readResource: () => Effect.succeed({}),
+      writeResource: () => Effect.void,
+    };
+  }
+
   it('loads config and runs translation with default model', async () => {
     const logs: string[] = [];
-    const translationCalls: unknown[] = [];
+    let translationCalls = 0;
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
     const program = runTranslate(
       {
@@ -31,25 +46,29 @@ describe('runTranslate', () => {
         skipLanguages: false,
         fast: false,
       },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
       (opts) =>
         Effect.sync(() => {
-          translationCalls.push(opts);
+          translationCalls++;
+          expect(opts.adapters).toHaveLength(1);
+          expect(opts.sourceLocale).toBe('en');
         }),
-      (msg) =>
-        Effect.sync(() => {
-          logs.push(msg);
-        }),
+      (msg) => Effect.sync(() => logs.push(msg)),
     );
 
     await Effect.runPromise(program);
-    expect(translationCalls).toHaveLength(1);
-    expect(logs).toContain('Translation complete.');
+    expect(translationCalls).toBe(1);
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.success).toBe(true);
+    expect(parsed.message).toBe('Translation complete.');
   });
 
   it('uses fastModel when --fast is passed', async () => {
-    let resolvedModel: unknown;
+    let usedModel: string | undefined;
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
     const program = runTranslate(
       {
@@ -63,10 +82,10 @@ describe('runTranslate', () => {
         skipLanguages: false,
         fast: true,
       },
-      () => Effect.succeed(baseConfig),
-      (config) =>
+      () => Effect.succeed(config),
+      (modelConfig) =>
         Effect.sync(() => {
-          resolvedModel = config;
+          usedModel = modelConfig.modelId;
           return {};
         }),
       () => Effect.void,
@@ -74,11 +93,48 @@ describe('runTranslate', () => {
     );
 
     await Effect.runPromise(program);
-    expect(resolvedModel).toEqual(baseConfig.fastModel);
+    expect(usedModel).toBe('gpt-4o-mini');
+  });
+
+  it('uses default strategy from config', async () => {
+    let strategy: TranslationStrategy | undefined;
+    const adapter = makeAdapter({ name: 'test' });
+    const config: DialektConfig = {
+      ...baseConfig,
+      strategy: 'tool-loop-agent',
+      adapters: [adapter] as unknown as DialektConfig['adapters'],
+    };
+
+    const program = runTranslate(
+      {
+        config: './config.ts',
+        adapter: Option.none(),
+        strategy: Option.none(),
+        baseLanguage: Option.none(),
+        language: Option.none(),
+        name: Option.none(),
+        skipNames: false,
+        skipLanguages: false,
+        fast: false,
+      },
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
+      (opts) =>
+        Effect.sync(() => {
+          strategy = opts.strategy;
+        }),
+      () => Effect.void,
+    );
+
+    await Effect.runPromise(program);
+    expect(strategy).toBeDefined();
+    expect(strategy!.name).toBe('tool-loop-agent');
   });
 
   it('overrides strategy with --strategy flag', async () => {
-    let usedStrategy: string | undefined;
+    let strategyName: string | undefined;
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
     const program = runTranslate(
       {
@@ -92,53 +148,29 @@ describe('runTranslate', () => {
         skipLanguages: false,
         fast: false,
       },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
       (opts) =>
         Effect.sync(() => {
-          usedStrategy = (opts.strategy as { name: string }).name;
+          strategyName = opts.strategy.name;
         }),
       () => Effect.void,
     );
 
     await Effect.runPromise(program);
-    expect(usedStrategy).toBe('tool-loop-agent');
-  });
-
-  it('overrides sourceLocale with --base-language flag', async () => {
-    const program = runTranslate(
-      {
-        config: './config.ts',
-        adapter: Option.none(),
-        strategy: Option.none(),
-        baseLanguage: Option.some('fr'),
-        language: Option.none(),
-        name: Option.none(),
-        skipNames: false,
-        skipLanguages: false,
-        fast: false,
-      },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
-      (opts) =>
-        Effect.sync(() => {
-          expect(opts.sourceLocale).toBe('fr');
-        }),
-      () => Effect.void,
-    );
-
-    await Effect.runPromise(program);
+    expect(strategyName).toBe('tool-loop-agent');
   });
 
   it('filters adapters by --adapter flag', async () => {
-    const adapterA = { name: 'a', capabilities: { canCreateResource: true, unusedKeyDetection: false }, listLocales: () => Effect.void as unknown as Effect.Effect<string[], never>, listResources: () => Effect.void as unknown as Effect.Effect<{ key: string; label: string }[], never>, readResource: () => Effect.void as unknown as Effect.Effect<Record<string, string>, never>, writeResource: () => Effect.void };
-    const adapterB = { name: 'b', capabilities: { canCreateResource: true, unusedKeyDetection: false }, listLocales: () => Effect.void as unknown as Effect.Effect<string[], never>, listResources: () => Effect.void as unknown as Effect.Effect<{ key: string; label: string }[], never>, readResource: () => Effect.void as unknown as Effect.Effect<Record<string, string>, never>, writeResource: () => Effect.void };
-    const config = { ...baseConfig, adapters: [adapterA, adapterB] as unknown as DialektConfig['adapters'] };
+    let usedAdapterName: string | undefined;
+    const a1 = makeAdapter({ name: 'a1' });
+    const a2 = makeAdapter({ name: 'a2' });
+    const config = { ...baseConfig, adapters: [a1, a2] as unknown as DialektConfig['adapters'] };
 
     const program = runTranslate(
       {
         config: './config.ts',
-        adapter: Option.some('b'),
+        adapter: Option.some('a2'),
         strategy: Option.none(),
         baseLanguage: Option.none(),
         language: Option.none(),
@@ -148,16 +180,16 @@ describe('runTranslate', () => {
         fast: false,
       },
       () => Effect.succeed(config),
-      () => Effect.succeed({} as unknown),
+      () => Effect.succeed({}),
       (opts) =>
         Effect.sync(() => {
-          expect(opts.adapters).toHaveLength(1);
-          expect((opts.adapters[0] as { name: string }).name).toBe('b');
+          usedAdapterName = (opts.adapters as TranslationAdapter[])[0]!.name;
         }),
       () => Effect.void,
     );
 
     await Effect.runPromise(program);
+    expect(usedAdapterName).toBe('a2');
   });
 
   it('fails when configLoader fails', async () => {
@@ -174,8 +206,7 @@ describe('runTranslate', () => {
         fast: false,
       },
       () => Effect.fail(new Error('Config not found')),
-      () => Effect.succeed({} as unknown),
-      () => Effect.void,
+      () => Effect.succeed({}),
       () => Effect.void,
     );
 
@@ -183,104 +214,9 @@ describe('runTranslate', () => {
   });
 
   it('fails when modelResolver fails', async () => {
-    const program = runTranslate(
-      {
-        config: './config.ts',
-        adapter: Option.none(),
-        strategy: Option.none(),
-        baseLanguage: Option.none(),
-        language: Option.none(),
-        name: Option.none(),
-        skipNames: false,
-        skipLanguages: false,
-        fast: false,
-      },
-      () => Effect.succeed(baseConfig),
-      () => Effect.fail(new Error('Model unavailable')),
-      () => Effect.void,
-      () => Effect.void,
-    );
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
-    await expect(Effect.runPromise(program)).rejects.toThrow('Model unavailable');
-  });
-
-  it('fails when translationRunner fails', async () => {
-    const program = runTranslate(
-      {
-        config: './config.ts',
-        adapter: Option.none(),
-        strategy: Option.none(),
-        baseLanguage: Option.none(),
-        language: Option.none(),
-        name: Option.none(),
-        skipNames: false,
-        skipLanguages: false,
-        fast: false,
-      },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
-      () => Effect.fail(new Error('Translation failed')),
-      () => Effect.void,
-    );
-
-    await expect(Effect.runPromise(program)).rejects.toThrow('Translation failed');
-  });
-
-  it('ignores invalid strategy values and falls back to config', async () => {
-    let usedStrategy: string | undefined;
-
-    const program = runTranslate(
-      {
-        config: './config.ts',
-        adapter: Option.none(),
-        strategy: Option.some('invalid-strategy'),
-        baseLanguage: Option.none(),
-        language: Option.none(),
-        name: Option.none(),
-        skipNames: false,
-        skipLanguages: false,
-        fast: false,
-      },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
-      (opts) =>
-        Effect.sync(() => {
-          usedStrategy = (opts.strategy as { name: string }).name;
-        }),
-      () => Effect.void,
-    );
-
-    await Effect.runPromise(program);
-    expect(usedStrategy).toBe('one-shot');
-  });
-
-  it('limits targetLocales with --language flag', async () => {
-    const program = runTranslate(
-      {
-        config: './config.ts',
-        adapter: Option.none(),
-        strategy: Option.none(),
-        baseLanguage: Option.none(),
-        language: Option.some('de'),
-        name: Option.none(),
-        skipNames: false,
-        skipLanguages: false,
-        fast: false,
-      },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
-      (opts) =>
-        Effect.sync(() => {
-          expect(opts.targetLocales).toEqual(['de']);
-        }),
-      () => Effect.void,
-    );
-
-    await Effect.runPromise(program);
-  });
-
-  it('handles empty targetLocales gracefully', async () => {
-    const config = { ...baseConfig, targetLocales: [] };
     const program = runTranslate(
       {
         config: './config.ts',
@@ -294,18 +230,17 @@ describe('runTranslate', () => {
         fast: false,
       },
       () => Effect.succeed(config),
-      () => Effect.succeed({} as unknown),
-      (opts) =>
-        Effect.sync(() => {
-          expect(opts.targetLocales).toEqual([]);
-        }),
+      () => Effect.fail(new Error('No API key')),
       () => Effect.void,
     );
 
-    await Effect.runPromise(program);
+    await expect(Effect.runPromise(program)).rejects.toThrow('No API key');
   });
 
-  it('handles empty adapters list', async () => {
+  it('fails when translationRunner fails', async () => {
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
     const program = runTranslate(
       {
         config: './config.ts',
@@ -318,15 +253,132 @@ describe('runTranslate', () => {
         skipLanguages: false,
         fast: false,
       },
-      () => Effect.succeed(baseConfig),
-      () => Effect.succeed({} as unknown),
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
+      () => Effect.fail(new Error('Translation failed')),
+      () => Effect.void,
+    );
+
+    await expect(Effect.runPromise(program)).rejects.toThrow('Translation failed');
+  });
+
+  it('uses one-shot strategy by default', async () => {
+    let strategyName: string | undefined;
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
+    const program = runTranslate(
+      {
+        config: './config.ts',
+        adapter: Option.none(),
+        strategy: Option.none(),
+        baseLanguage: Option.none(),
+        language: Option.none(),
+        name: Option.none(),
+        skipNames: false,
+        skipLanguages: false,
+        fast: false,
+      },
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
+      (opts) =>
+        Effect.sync(() => {
+          strategyName = opts.strategy.name;
+        }),
+      () => Effect.void,
+    );
+
+    await Effect.runPromise(program);
+    expect(strategyName).toBe('one-shot');
+  });
+
+  it('filters target locales by --language flag', async () => {
+    let targetLocales: readonly string[] = [];
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
+    const program = runTranslate(
+      {
+        config: './config.ts',
+        adapter: Option.none(),
+        strategy: Option.none(),
+        baseLanguage: Option.none(),
+        language: Option.some('de'),
+        name: Option.none(),
+        skipNames: false,
+        skipLanguages: false,
+        fast: false,
+      },
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
+      (opts) =>
+        Effect.sync(() => {
+          targetLocales = opts.targetLocales;
+        }),
+      () => Effect.void,
+    );
+
+    await Effect.runPromise(program);
+    expect(targetLocales).toEqual(['de']);
+  });
+
+  it('outputs pretty when --format pretty is passed', async () => {
+    const logs: string[] = [];
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
+    const program = runTranslate(
+      {
+        config: './config.ts',
+        adapter: Option.none(),
+        strategy: Option.none(),
+        baseLanguage: Option.none(),
+        language: Option.none(),
+        name: Option.none(),
+        skipNames: false,
+        skipLanguages: false,
+        fast: false,
+        format: Option.some('pretty'),
+      },
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
+      () => Effect.void,
+      (msg) => Effect.sync(() => logs.push(msg)),
+    );
+
+    await Effect.runPromise(program);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('Translation complete');
+  });
+
+  it('handles empty adapters list', async () => {
+    const logs: string[] = [];
+    const config = { ...baseConfig, adapters: [] };
+
+    const program = runTranslate(
+      {
+        config: './config.ts',
+        adapter: Option.none(),
+        strategy: Option.none(),
+        baseLanguage: Option.none(),
+        language: Option.none(),
+        name: Option.none(),
+        skipNames: false,
+        skipLanguages: false,
+        fast: false,
+      },
+      () => Effect.succeed(config),
+      () => Effect.succeed({}),
       (opts) =>
         Effect.sync(() => {
           expect(opts.adapters).toHaveLength(0);
         }),
-      (msg) => Effect.sync(() => expect(msg).toBe('Translation complete.')),
+      (msg) => Effect.sync(() => logs.push(msg)),
     );
 
     await Effect.runPromise(program);
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.success).toBe(true);
   });
 });

@@ -20,3 +20,35 @@ export { runTranslation } from './translation/orchestrator.js';
 export { buildSystemPrompt, buildUserPrompt } from './translation/prompt.js';
 export { computeMissingKeys } from './translation/missing-keys.js';
 export { loadConfig, ConfigLoadError } from './config/load-config.js';
+export {
+  detectFormat,
+  formatMissingKeys,
+  formatUnusedKeys,
+  formatValidate,
+  formatLanguages,
+  formatTranslate,
+  formatAdd,
+  formatBenchmark,
+  formatError,
+  color,
+  glyphs,
+  drawTable,
+  banner,
+  sectionHeader,
+  success,
+  failure,
+  warning,
+  info,
+  keyValue,
+} from './cli/format.js';
+export type {
+  OutputFormat,
+  MissingKeyEntry,
+  UnusedKeyEntry,
+  ValidateEntry,
+  ValidateResult,
+  LanguageEntry,
+  TranslateResult,
+  AddResult,
+  BenchmarkEntry,
+} from './cli/format.js';

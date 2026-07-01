@@ -10,7 +10,7 @@ export interface UnusedFlags {
   readonly config: string;
   readonly adapter: Option.Option<string>;
   readonly baseLanguage: Option.Option<string>;
-  readonly format: Option.Option<string>;
+  readonly format?: Option.Option<string>;
 }
 
 export function runUnused(
@@ -41,7 +41,11 @@ export function runUnused(
         yield* errorLogger(
           formatError(
             `Adapter '${a.name}' does not support unused-key detection.`,
-            detectFormat(Option.getOrUndefined(flags.format) as OutputFormat | undefined),
+            detectFormat(
+              flags.format !== undefined
+                ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+                : undefined,
+            ),
           ),
         );
         continue;
@@ -65,7 +69,9 @@ export function runUnused(
     }
 
     const format = detectFormat(
-      Option.getOrUndefined(flags.format) as OutputFormat | undefined,
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
     );
 
     yield* logger(formatUnusedKeys(allEntries, format));

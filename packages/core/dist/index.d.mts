@@ -191,20 +191,20 @@ interface TranslationRunConfig {
   readonly targetLocales: readonly string[];
   readonly chunking: ChunkingConfig;
 }
-declare function runTranslation(config: TranslationRunConfig): Effect.Effect<undefined, AdapterReadError | AdapterWriteError | TranslationFailedError, never>;
+declare function runTranslation(config: TranslationRunConfig): Effect.Effect<undefined, TranslationFailedError | AdapterReadError | AdapterWriteError, never>;
 //#endregion
 //#region src/translation/prompt.d.ts
 declare function buildSystemPrompt(from: string, to: string): string;
 declare function buildUserPrompt(ctx: TranslationContext): string;
 //#endregion
 //#region src/translation/missing-keys.d.ts
-interface MissingKeyEntry {
+interface MissingKeyEntry$1 {
   readonly adapter: string;
   readonly locale: string;
   readonly resource: ResourceRef;
   readonly missing: readonly string[];
 }
-declare function computeMissingKeys(adapter: TranslationAdapter, sourceLocale: string, targetLocales: readonly string[]): Effect.Effect<readonly MissingKeyEntry[], AdapterReadError>;
+declare function computeMissingKeys(adapter: TranslationAdapter, sourceLocale: string, targetLocales: readonly string[]): Effect.Effect<readonly MissingKeyEntry$1[], AdapterReadError>;
 //#endregion
 //#region src/config/load-config.d.ts
 declare const ConfigLoadError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
@@ -216,4 +216,112 @@ declare class ConfigLoadError extends ConfigLoadError_base<{
 }> {}
 declare function loadConfig(configPath: string): Effect.Effect<DialektConfig, ConfigLoadError>;
 //#endregion
-export { type AdapterCapabilities, AdapterReadError, AdapterWriteError, type ChunkingConfig, ConfigLoadError, type DialektConfig, type ModelConfig, NodePlatformLayer, PhpExecutionError, type ResourceRef, type RetryConfig, type TranslationAdapter, type TranslationContext, TranslationFailedError, type TranslationStrategy, UnknownProviderError, buildSystemPrompt, buildUserPrompt, chunkKeys, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, diffKeys, flattenObject, loadConfig, readFileIfExists, readPhpArrayAsJson, resolveModel, runTranslation, unflattenObject, writeFileEnsuringDir };
+//#region src/cli/format.d.ts
+/**
+ * Terminal formatting helpers for the dialekt CLI output.
+ *
+ * Two output modes:
+ *   - `pretty` — lush human-readable output with colours and grouping (TTY only)
+ *   - `json`   — single compact JSON document for AI agents / machines
+ *
+ * stdout is the data contract in every mode; status / banners go to stderr.
+ * All decoration is gated behind `isTTY` so the output is never mojibake-prone
+ * when piped or consumed by another process.
+ */
+type OutputFormat = 'pretty' | 'json';
+/**
+ * Resolves the output format from explicit flag and environment.
+ * Precedence: explicit `--format` > auto-detection.
+ *
+ * Auto-detection picks `json` when stdout is not a TTY or an agent env var
+ * is present; otherwise `pretty`.
+ */
+declare function detectFormat(explicit?: OutputFormat | undefined): OutputFormat;
+/** Wraps text in ANSI codes only when stdout is a TTY; otherwise returns it bare. */
+declare function color(text: string, ...codes: string[]): string;
+interface Glyphs {
+  hLine: string;
+  vLine: string;
+  cornerTL: string;
+  cornerTR: string;
+  cornerBL: string;
+  cornerBR: string;
+  teeRight: string;
+  teeLeft: string;
+  teeDown: string;
+  teeUp: string;
+  cross: string;
+  bullet: string;
+  arrow: string;
+  check: string;
+  crossMark: string;
+  warn: string;
+}
+declare function glyphs(): Glyphs;
+declare function drawTable(headers: readonly string[], rows: readonly (readonly string[])[]): string;
+declare function banner(title: string): string;
+declare function sectionHeader(label: string): string;
+declare function success(text: string): string;
+declare function failure(text: string): string;
+declare function warning(text: string): string;
+declare function info(text: string): string;
+declare function keyValue(key: string, value: string): string;
+interface MissingKeyEntry {
+  readonly adapter: string;
+  readonly locale: string;
+  readonly resource: string;
+  readonly key: string;
+}
+declare function formatMissingKeys(entries: readonly MissingKeyEntry[], format: OutputFormat): string;
+interface UnusedKeyEntry {
+  readonly adapter: string;
+  readonly locale: string;
+  readonly resource: string;
+  readonly key: string;
+}
+declare function formatUnusedKeys(entries: readonly UnusedKeyEntry[], format: OutputFormat): string;
+interface ValidateEntry {
+  readonly adapter: string;
+  readonly locale: string;
+  readonly resource: string;
+  readonly count: number;
+}
+interface ValidateResult {
+  readonly passing: boolean;
+  readonly entries: readonly ValidateEntry[];
+}
+declare function formatValidate(result: ValidateResult, format: OutputFormat): string;
+interface LanguageEntry {
+  readonly adapter: string;
+  readonly locales: readonly string[];
+}
+declare function formatLanguages(entries: readonly LanguageEntry[], format: OutputFormat): string;
+interface TranslateResult {
+  readonly success: boolean;
+  readonly message: string;
+  readonly stats?: {
+    readonly adaptersProcessed: number;
+    readonly localesTranslated: number;
+    readonly keysTranslated: number;
+  };
+}
+declare function formatTranslate(result: TranslateResult, format: OutputFormat): string;
+interface AddResult {
+  readonly success: boolean;
+  readonly message: string;
+  readonly addedResources?: readonly string[];
+}
+declare function formatAdd(result: AddResult, format: OutputFormat): string;
+interface BenchmarkEntry {
+  readonly strategyName: string;
+  readonly totalChunks: number;
+  readonly succeededChunks: number;
+  readonly failedChunks: number;
+  readonly totalDurationMs: number;
+  readonly averageDurationMsPerChunk: number;
+  readonly totalAttempts: number;
+}
+declare function formatBenchmark(entries: readonly BenchmarkEntry[], format: OutputFormat): string;
+declare function formatError(message: string, format: OutputFormat): string;
+//#endregion
+export { type AdapterCapabilities, AdapterReadError, AdapterWriteError, type AddResult, type BenchmarkEntry, type ChunkingConfig, ConfigLoadError, type DialektConfig, type LanguageEntry, type MissingKeyEntry, type ModelConfig, NodePlatformLayer, type OutputFormat, PhpExecutionError, type ResourceRef, type RetryConfig, type TranslateResult, type TranslationAdapter, type TranslationContext, TranslationFailedError, type TranslationStrategy, UnknownProviderError, type UnusedKeyEntry, type ValidateEntry, type ValidateResult, banner, buildSystemPrompt, buildUserPrompt, chunkKeys, color, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, detectFormat, diffKeys, drawTable, failure, flattenObject, formatAdd, formatBenchmark, formatError, formatLanguages, formatMissingKeys, formatTranslate, formatUnusedKeys, formatValidate, glyphs, info, keyValue, loadConfig, readFileIfExists, readPhpArrayAsJson, resolveModel, runTranslation, sectionHeader, success, unflattenObject, warning, writeFileEnsuringDir };

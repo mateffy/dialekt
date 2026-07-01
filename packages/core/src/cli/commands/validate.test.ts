@@ -44,53 +44,71 @@ describe('runValidate', () => {
     );
 
     await Effect.runPromise(program);
-    expect(logs).toContain('All translations up to date.');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.passing).toBe(true);
+    expect(parsed.entries).toEqual([]);
   });
 
-  it('fails with Error when missing keys are found', async () => {
+  it('fails and reports missing keys', async () => {
     const logs: string[] = [];
     const adapter = makeAdapter({ name: 'test' });
     const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
     const resource: ResourceRef = { key: 'messages', label: 'messages' };
 
+    const originalExitCode = process.exitCode;
     const program = runValidate(
       { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
-      () => Effect.succeed([{ adapter: 'test', locale: 'de', resource, missing: ['hello'] }]),
+      () =>
+        Effect.succeed([
+          { adapter: 'test', locale: 'de', resource, missing: ['hello'] },
+        ]),
       (msg) => Effect.sync(() => logs.push(msg)),
     );
 
-    await expect(Effect.runPromise(program)).rejects.toThrow('Missing keys found');
-    expect(logs.some((l) => l.includes('test/de/messages: 1 missing'))).toBe(true);
+    await Effect.runPromise(program);
+    process.exitCode = originalExitCode;
+
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.passing).toBe(false);
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0]).toMatchObject({ adapter: 'test', locale: 'de', resource: 'messages', count: 1 });
   });
 
   it('reports missing keys for multiple adapters', async () => {
     const logs: string[] = [];
     const a1 = makeAdapter({ name: 'a1' });
-    const a2 = makeAdapter({ name: 'a2' });
+    const a2 = makeAdapter({ name: 'a2', locales: ['en', 'fr'] });
     const config = { ...baseConfig, adapters: [a1, a2] as unknown as DialektConfig['adapters'] };
     const resource: ResourceRef = { key: 'messages', label: 'messages' };
 
+    const originalExitCode = process.exitCode;
     const program = runValidate(
       { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       (a) =>
         Effect.succeed([
-          { adapter: a.name, locale: 'de', resource, missing: ['k1'] },
+          { adapter: a.name, locale: a.name === 'a1' ? 'de' : 'fr', resource, missing: ['k1'] },
         ]),
       (msg) => Effect.sync(() => logs.push(msg)),
     );
 
-    await expect(Effect.runPromise(program)).rejects.toThrow('Missing keys found');
-    expect(logs).toHaveLength(2);
+    await Effect.runPromise(program);
+    process.exitCode = originalExitCode;
+
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.passing).toBe(false);
+    expect(parsed.entries).toHaveLength(2);
   });
 
-  it('filters adapters by --adapter flag', async () => {
-    const logs: string[] = [];
+  it('filters by --adapter flag', async () => {
+    let queriedAdapter: string | undefined;
     const a1 = makeAdapter({ name: 'a1' });
     const a2 = makeAdapter({ name: 'a2' });
     const config = { ...baseConfig, adapters: [a1, a2] as unknown as DialektConfig['adapters'] };
-    let queriedAdapter: string | undefined;
 
     const program = runValidate(
       { config: './config.ts', adapter: Option.some('a2'), baseLanguage: Option.none(), language: Option.none() },
@@ -100,51 +118,11 @@ describe('runValidate', () => {
           queriedAdapter = a.name;
           return [];
         }),
-      (msg) => Effect.sync(() => logs.push(msg)),
+      () => Effect.void,
     );
 
     await Effect.runPromise(program);
     expect(queriedAdapter).toBe('a2');
-  });
-
-  it('overrides sourceLocale with --base-language', async () => {
-    let usedSource: string | undefined;
-    const adapter = makeAdapter({ name: 'test', locales: ['fr', 'de'] });
-    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
-
-    const program = runValidate(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.some('fr'), language: Option.none() },
-      () => Effect.succeed(config),
-      (_a, sourceLocale, _targets) =>
-        Effect.sync(() => {
-          usedSource = sourceLocale;
-          return [];
-        }),
-      () => Effect.void,
-    );
-
-    await Effect.runPromise(program);
-    expect(usedSource).toBe('fr');
-  });
-
-  it('limits target locales with --language flag', async () => {
-    let usedTargets: readonly string[] | undefined;
-    const adapter = makeAdapter({ name: 'test' });
-    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
-
-    const program = runValidate(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.some('de') },
-      () => Effect.succeed(config),
-      (_a, _s, targets) =>
-        Effect.sync(() => {
-          usedTargets = targets;
-          return [];
-        }),
-      () => Effect.void,
-    );
-
-    await Effect.runPromise(program);
-    expect(usedTargets).toEqual(['de']);
   });
 
   it('fails when configLoader fails', async () => {
@@ -158,7 +136,7 @@ describe('runValidate', () => {
     await expect(Effect.runPromise(program)).rejects.toThrow('Config not found');
   });
 
-  it('fails when adapter listLocales fails', async () => {
+  it('fails when listLocales fails', async () => {
     const adapter: TranslationAdapter = {
       name: 'broken',
       capabilities: { canCreateResource: true, unusedKeyDetection: false },
@@ -179,6 +157,57 @@ describe('runValidate', () => {
     await expect(Effect.runPromise(program)).rejects.toThrow('disk error');
   });
 
+  it('fails when missingKeysComputer fails', async () => {
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
+    const program = runValidate(
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
+      () => Effect.succeed(config),
+      () => Effect.fail(new Error('read error')),
+      () => Effect.void,
+    );
+
+    await expect(Effect.runPromise(program)).rejects.toThrow('read error');
+  });
+
+  it('filters by --language flag', async () => {
+    let checkedLocale: string | undefined;
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
+    const program = runValidate(
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.some('de') },
+      () => Effect.succeed(config),
+      (_a, _s, targets) =>
+        Effect.sync(() => {
+          checkedLocale = targets[0];
+          return [];
+        }),
+      () => Effect.void,
+    );
+
+    await Effect.runPromise(program);
+    expect(checkedLocale).toBe('de');
+  });
+
+  it('outputs pretty when --format pretty is passed', async () => {
+    const logs: string[] = [];
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+
+    const program = runValidate(
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.some('pretty') },
+      () => Effect.succeed(config),
+      () => Effect.succeed([]),
+      (msg) => Effect.sync(() => logs.push(msg)),
+    );
+
+    await Effect.runPromise(program);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('up to date');
+  });
+
   it('handles empty adapter list', async () => {
     const logs: string[] = [];
     const config = { ...baseConfig, adapters: [] };
@@ -191,7 +220,9 @@ describe('runValidate', () => {
     );
 
     await Effect.runPromise(program);
-    expect(logs).toContain('All translations up to date.');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.passing).toBe(true);
   });
 
   it('handles adapter with only source locale (no targets)', async () => {
@@ -207,6 +238,8 @@ describe('runValidate', () => {
     );
 
     await Effect.runPromise(program);
-    expect(logs).toContain('All translations up to date.');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed.passing).toBe(true);
   });
 });

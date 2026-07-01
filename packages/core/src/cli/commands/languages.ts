@@ -8,7 +8,7 @@ import type { TranslationAdapter } from '../../adapter/types.js';
 
 export interface LanguagesFlags {
   readonly config: string;
-  readonly format: Option.Option<string>;
+  readonly format?: Option.Option<string>;
 }
 
 export function runLanguages(
@@ -27,7 +27,9 @@ export function runLanguages(
     }
 
     const format = detectFormat(
-      Option.getOrUndefined(flags.format) as OutputFormat | undefined,
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
     );
     yield* logger(formatLanguages(entries, format));
   }).pipe(Effect.mapError((e) => e as never)) as Effect.Effect<void, never, never>;

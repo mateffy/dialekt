@@ -38,7 +38,7 @@ describe('runMissing', () => {
     const resource: ResourceRef = { key: 'messages', label: 'messages' };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       () =>
         Effect.succeed([
@@ -48,8 +48,12 @@ describe('runMissing', () => {
     );
 
     await Effect.runPromise(program);
-    expect(logs).toContain('test/de/messages: hello');
-    expect(logs).toContain('test/de/messages: bye');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed).toEqual([
+      { adapter: 'test', locale: 'de', resource: 'messages', key: 'hello' },
+      { adapter: 'test', locale: 'de', resource: 'messages', key: 'bye' },
+    ]);
   });
 
   it('outputs JSON when --format json is passed', async () => {
@@ -76,20 +80,45 @@ describe('runMissing', () => {
     ]);
   });
 
-  it('returns empty output when nothing is missing', async () => {
+  it('outputs pretty when --format pretty is passed', async () => {
+    const logs: string[] = [];
+    const adapter = makeAdapter({ name: 'test' });
+    const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
+    const resource: ResourceRef = { key: 'messages', label: 'messages' };
+
+    const program = runMissing(
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.some('pretty') },
+      () => Effect.succeed(config),
+      () =>
+        Effect.succeed([
+          { adapter: 'test', locale: 'de', resource, missing: ['hello', 'bye'] },
+        ]),
+      (msg) => Effect.sync(() => logs.push(msg)),
+    );
+
+    await Effect.runPromise(program);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('test');
+    expect(logs[0]).toContain('de');
+    expect(logs[0]).toContain('hello');
+    expect(logs[0]).toContain('bye');
+  });
+
+  it('returns empty JSON array when nothing is missing', async () => {
     const logs: string[] = [];
     const adapter = makeAdapter({ name: 'test' });
     const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       () => Effect.succeed([]),
       (msg) => Effect.sync(() => logs.push(msg)),
     );
 
     await Effect.runPromise(program);
-    expect(logs).toHaveLength(0);
+    expect(logs).toHaveLength(1);
+    expect(JSON.parse(logs[0]!)).toEqual([]);
   });
 
   it('handles multiple adapters and multiple locales', async () => {
@@ -100,7 +129,7 @@ describe('runMissing', () => {
     const resource: ResourceRef = { key: 'messages', label: 'messages' };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       (a) =>
         Effect.succeed([
@@ -110,8 +139,11 @@ describe('runMissing', () => {
     );
 
     await Effect.runPromise(program);
-    expect(logs).toContain('a1/de/messages: k1');
-    expect(logs).toContain('a2/fr/messages: k1');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed).toHaveLength(2);
+    expect(parsed).toContainEqual({ adapter: 'a1', locale: 'de', resource: 'messages', key: 'k1' });
+    expect(parsed).toContainEqual({ adapter: 'a2', locale: 'fr', resource: 'messages', key: 'k1' });
   });
 
   it('filters adapters by --adapter flag', async () => {
@@ -121,7 +153,7 @@ describe('runMissing', () => {
     const config = { ...baseConfig, adapters: [a1, a2] as unknown as DialektConfig['adapters'] };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.some('a2'), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.some('a2'), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       (a) =>
         Effect.sync(() => {
@@ -137,7 +169,7 @@ describe('runMissing', () => {
 
   it('fails when configLoader fails', async () => {
     const program = runMissing(
-      { config: './missing.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './missing.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.fail(new Error('Config not found')),
       () => Effect.succeed([]),
       () => Effect.void,
@@ -158,7 +190,7 @@ describe('runMissing', () => {
     const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       () => Effect.succeed([]),
       () => Effect.void,
@@ -172,14 +204,15 @@ describe('runMissing', () => {
     const config = { ...baseConfig, adapters: [] };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       () => Effect.succeed([]),
       (msg) => Effect.sync(() => logs.push(msg)),
     );
 
     await Effect.runPromise(program);
-    expect(logs).toHaveLength(0);
+    expect(logs).toHaveLength(1);
+    expect(JSON.parse(logs[0]!)).toEqual([]);
   });
 
   it('handles single-locale adapter (no targets)', async () => {
@@ -188,14 +221,15 @@ describe('runMissing', () => {
     const config = { ...baseConfig, adapters: [adapter] as unknown as DialektConfig['adapters'] };
 
     const program = runMissing(
-      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none(), format: Option.none() },
+      { config: './config.ts', adapter: Option.none(), baseLanguage: Option.none(), language: Option.none() },
       () => Effect.succeed(config),
       () => Effect.succeed([]),
       (msg) => Effect.sync(() => logs.push(msg)),
     );
 
     await Effect.runPromise(program);
-    expect(logs).toHaveLength(0);
+    expect(logs).toHaveLength(1);
+    expect(JSON.parse(logs[0]!)).toEqual([]);
   });
 
   it('produces valid JSON array even with many entries', async () => {

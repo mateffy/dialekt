@@ -155,7 +155,11 @@ describe('runAdd', () => {
         Effect.sync(() => {
           translated = true;
         }),
-      (msg) => Effect.sync(() => expect(msg).toBe('Add + translate complete.')),
+      (msg) => Effect.sync(() => {
+        const parsed = JSON.parse(msg);
+        expect(parsed.success).toBe(true);
+        expect(parsed.message).toBe('Add + translate complete.');
+      }),
       () => Effect.void,
     );
 

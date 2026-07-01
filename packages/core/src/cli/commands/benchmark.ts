@@ -8,7 +8,7 @@ import { createToolLoopStrategy } from '../../translation/tool-loop-strategy.js'
 import { chunkKeys } from '../../translation/chunking.js';
 import { computeMissingKeys } from '../../translation/missing-keys.js';
 import { runBenchmark } from '../../benchmark/runner.js';
-import { formatBenchmarkReport } from '../../benchmark/report.js';
+import { detectFormat, formatBenchmark, formatError, type OutputFormat } from '../format.js';
 import type { DialektConfig } from '../../config/types.js';
 import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
 import type { TranslationStrategy, TranslationContext } from '../../translation/types.js';
@@ -19,7 +19,7 @@ export interface BenchmarkFlags {
   readonly adapter: Option.Option<string>;
   readonly strategies: Option.Option<string>;
   readonly sampleSize: Option.Option<number>;
-  readonly format: Option.Option<string>;
+  readonly format?: Option.Option<string>;
 }
 
 export interface BenchmarkDeps {
@@ -35,7 +35,7 @@ export interface BenchmarkDeps {
     chunks: readonly TranslationContext[];
     concurrency: number;
   }) => Effect.Effect<readonly StrategyBenchmarkSummary[], unknown>;
-  readonly reportFormatter: (summaries: readonly StrategyBenchmarkSummary[], format: 'table' | 'json') => string;
+  readonly reportFormatter?: (summaries: readonly StrategyBenchmarkSummary[], format: 'table' | 'json') => string;
   readonly logger: (msg: string) => Effect.Effect<void>;
   readonly errorLogger: (msg: string) => Effect.Effect<void>;
 }
@@ -46,7 +46,14 @@ export function runBenchmarkCommand(
 ): Effect.Effect<void, unknown> {
   return Effect.gen(function* () {
     yield* deps.errorLogger(
-      'Warning: This will make real API calls to the configured model provider(s) and may incur cost.',
+      formatError(
+        'Warning: This will make real API calls to the configured model provider(s) and may incur cost.',
+        detectFormat(
+          flags.format !== undefined
+            ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+            : undefined,
+        ),
+      ),
     );
 
     const loaded = yield* deps.configLoader(flags.config);
@@ -102,11 +109,23 @@ export function runBenchmarkCommand(
       concurrency: effective.chunking.concurrency,
     });
 
-    const report = deps.reportFormatter(
-      summaries,
-      Option.getOrUndefined(flags.format) === 'json' ? 'json' : 'table',
+    const format = detectFormat(
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
     );
-    yield* deps.logger(report);
+
+    const entries = summaries.map((s) => ({
+      strategyName: s.strategyName,
+      totalChunks: s.totalChunks,
+      succeededChunks: s.succeededChunks,
+      failedChunks: s.failedChunks,
+      totalDurationMs: s.totalDurationMs,
+      averageDurationMsPerChunk: s.averageDurationMsPerChunk,
+      totalAttempts: s.totalAttempts,
+    }));
+
+    yield* deps.logger(formatBenchmark(entries, format));
   });
 }
 
@@ -122,7 +141,6 @@ export const benchmarkCommand = Command.make('benchmark', {
     modelResolver: resolveModel,
     missingKeysComputer: computeMissingKeys as unknown as BenchmarkDeps['missingKeysComputer'],
     benchmarkRunner: runBenchmark,
-    reportFormatter: formatBenchmarkReport,
     logger: (msg: string) => Console.log(msg),
     errorLogger: (msg: string) => Console.error(msg),
   }),

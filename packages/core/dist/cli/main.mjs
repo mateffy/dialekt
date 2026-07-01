@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { a as createToolLoopStrategy, d as resolveModel, f as chunkKeys, i as runTranslation, n as loadConfig, o as createOneShotStrategy, r as computeMissingKeys } from "../load-config-CS2REd1I.mjs";
+import { A as resolveModel, C as runTranslation, S as computeMissingKeys, T as createOneShotStrategy, c as formatError, d as formatTranslate, f as formatUnusedKeys, j as chunkKeys, l as formatLanguages, o as formatAdd, p as formatValidate, r as detectFormat, s as formatBenchmark, u as formatMissingKeys, w as createToolLoopStrategy, x as loadConfig } from "../format-BJuqnDpW.mjs";
 import { Console, Effect, Option } from "effect";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command, Options } from "@effect/cli";
@@ -39,7 +39,16 @@ function runTranslate(flags, configLoader = loadConfig, modelResolver = resolveM
 			targetLocales: effective.targetLocales ?? [],
 			chunking: effective.chunking
 		});
-		yield* logger("Translation complete.");
+		const format = detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0);
+		yield* logger(formatTranslate({
+			success: true,
+			message: "Translation complete.",
+			stats: {
+				adaptersProcessed: effective.adapters.length,
+				localesTranslated: (effective.targetLocales ?? []).length,
+				keysTranslated: 0
+			}
+		}, format));
 	});
 }
 const translateCommand = Command.make("translate", {
@@ -51,7 +60,8 @@ const translateCommand = Command.make("translate", {
 	name: Options.optional(Options.text("name")),
 	skipNames: Options.boolean("skip-names"),
 	skipLanguages: Options.boolean("skip-languages"),
-	fast: Options.boolean("fast")
+	fast: Options.boolean("fast"),
+	format: Options.optional(Options.text("format"))
 }, (flags) => runTranslate(flags));
 //#endregion
 //#region src/cli/commands/validate.ts
@@ -63,25 +73,35 @@ function runValidate(flags, configLoader = loadConfig, missingKeysComputer = com
 			language: Option.isSome(flags.language) ? [flags.language.value] : void 0,
 			adapter: Option.getOrUndefined(flags.adapter)
 		}, loaded);
-		let hasMissing = false;
+		const entries = [];
 		for (const a of effective.adapters) {
 			const locales = yield* a.listLocales();
 			const sourceLocale = effective.sourceLocale;
-			const entries = yield* missingKeysComputer(a, sourceLocale, locales.filter((l) => l !== sourceLocale));
-			for (const entry of entries) {
-				hasMissing = true;
-				yield* logger(`${entry.adapter}/${entry.locale}/${entry.resource.label}: ${entry.missing.length} missing`);
-			}
+			const missingEntries = yield* missingKeysComputer(a, sourceLocale, locales.filter((l) => l !== sourceLocale));
+			for (const entry of missingEntries) entries.push({
+				adapter: entry.adapter,
+				locale: entry.locale,
+				resource: entry.resource.label,
+				count: entry.missing.length
+			});
 		}
-		if (hasMissing) return yield* Effect.fail(/* @__PURE__ */ new Error("Missing keys found"));
-		yield* logger("All translations up to date.");
+		const format = detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0);
+		const passing = entries.length === 0;
+		yield* logger(formatValidate({
+			passing,
+			entries
+		}, format));
+		if (!passing) yield* Effect.sync(() => {
+			process.exitCode = 1;
+		});
 	}).pipe(Effect.mapError((e) => e));
 }
 const validateCommand = Command.make("validate", {
 	config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
 	adapter: Options.optional(Options.text("adapter")),
 	baseLanguage: Options.optional(Options.text("base-language")),
-	language: Options.optional(Options.text("language"))
+	language: Options.optional(Options.text("language")),
+	format: Options.optional(Options.text("format"))
 }, (flags) => runValidate(flags));
 //#endregion
 //#region src/cli/commands/add.ts
@@ -113,12 +133,14 @@ function runAdd(flags, tokens, configLoader = loadConfig, modelResolver = resolv
 	return Effect.gen(function* () {
 		const effective = resolveEffectiveConfig({}, yield* configLoader(flags.config));
 		const entriesByResource = yield* parseAddTokens(tokens, errorLogger);
+		const addedResources = [];
 		for (const adapter of effective.adapters) for (const [resourceKey, entries] of Object.entries(entriesByResource)) {
 			const resourceRef = {
 				key: resourceKey,
 				label: resourceKey
 			};
 			yield* adapter.writeResource(effective.sourceLocale, resourceRef, entries);
+			addedResources.push(`${adapter.name}/${effective.sourceLocale}/${resourceKey}`);
 		}
 		const modelConfig = effective.model;
 		const model = yield* modelResolver(modelConfig);
@@ -136,17 +158,24 @@ function runAdd(flags, tokens, configLoader = loadConfig, modelResolver = resolv
 			targetLocales: (effective.targetLocales ?? []).filter((l) => l !== effective.sourceLocale),
 			chunking: effective.chunking
 		});
-		yield* logger("Add + translate complete.");
+		const format = detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0);
+		yield* logger(formatAdd({
+			success: true,
+			message: "Add + translate complete.",
+			addedResources
+		}, format));
 	});
 }
 const addCommand = Command.make("add", {
 	config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
-	create: Options.boolean("create")
-}, ({ config, create }) => {
+	create: Options.boolean("create"),
+	format: Options.optional(Options.text("format"))
+}, ({ config, create, format }) => {
 	const rawTokens = process.argv.slice(3).filter((t) => !t.startsWith("--") && !t.startsWith("-"));
 	return runAdd({
 		config,
-		create
+		create,
+		format
 	}, rawTokens);
 });
 //#endregion
@@ -171,8 +200,7 @@ function runMissing(flags, configLoader = loadConfig, missingKeysComputer = comp
 				key
 			});
 		}
-		if (Option.getOrUndefined(flags.format) === "json") yield* logger(JSON.stringify(allEntries, null, 2));
-		else for (const e of allEntries) yield* logger(`${e.adapter}/${e.locale}/${e.resource}: ${e.key}`);
+		yield* logger(formatMissingKeys(allEntries, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
 	}).pipe(Effect.mapError((e) => e));
 }
 const missingCommand = Command.make("missing", {
@@ -191,9 +219,10 @@ function runUnused(flags, configLoader = loadConfig, logger = (msg) => Console.l
 			baseLanguage: Option.getOrUndefined(flags.baseLanguage),
 			adapter: Option.getOrUndefined(flags.adapter)
 		}, loaded);
+		const allEntries = [];
 		for (const a of effective.adapters) {
 			if (!a.capabilities.unusedKeyDetection) {
-				yield* errorLogger(`Adapter '${a.name}' does not support unused-key detection.`);
+				yield* errorLogger(formatError(`Adapter '${a.name}' does not support unused-key detection.`, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
 				continue;
 			}
 			yield* a.listLocales();
@@ -201,28 +230,43 @@ function runUnused(flags, configLoader = loadConfig, logger = (msg) => Console.l
 			const resources = yield* a.listResources(sourceLocale);
 			for (const resource of resources) {
 				const unused = yield* a.findUnusedKeys(sourceLocale, resource);
-				for (const key of unused) yield* logger(`${a.name}/${sourceLocale}/${resource.label}: ${key}`);
+				for (const key of unused) allEntries.push({
+					adapter: a.name,
+					locale: sourceLocale,
+					resource: resource.label,
+					key
+				});
 			}
 		}
+		yield* logger(formatUnusedKeys(allEntries, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
 	}).pipe(Effect.mapError((e) => e));
 }
 const unusedCommand = Command.make("unused", {
 	config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
 	adapter: Options.optional(Options.text("adapter")),
-	baseLanguage: Options.optional(Options.text("base-language"))
+	baseLanguage: Options.optional(Options.text("base-language")),
+	format: Options.optional(Options.text("format"))
 }, (flags) => runUnused(flags));
 //#endregion
 //#region src/cli/commands/languages.ts
 function runLanguages(flags, configLoader = loadConfig, logger = (msg) => Console.log(msg)) {
 	return Effect.gen(function* () {
 		const effective = resolveEffectiveConfig({}, yield* configLoader(flags.config));
+		const entries = [];
 		for (const adapter of effective.adapters) {
 			const locales = yield* adapter.listLocales();
-			yield* logger(`${adapter.name}: ${locales.join(", ")}`);
+			entries.push({
+				adapter: adapter.name,
+				locales
+			});
 		}
+		yield* logger(formatLanguages(entries, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
 	}).pipe(Effect.mapError((e) => e));
 }
-const languagesCommand = Command.make("languages", { config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")) }, (flags) => runLanguages(flags));
+const languagesCommand = Command.make("languages", {
+	config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
+	format: Options.optional(Options.text("format"))
+}, (flags) => runLanguages(flags));
 //#endregion
 //#region src/benchmark/metrics.ts
 function summarizeBenchmarkResults(results) {
@@ -277,25 +321,10 @@ function runBenchmark(config) {
 	});
 }
 //#endregion
-//#region src/benchmark/report.ts
-function formatBenchmarkReport(summaries, format) {
-	if (format === "json") return JSON.stringify(summaries, null, 2);
-	const lines = ["Benchmark Results", "================="];
-	for (const s of summaries) {
-		lines.push(`Strategy: ${s.strategyName}`);
-		lines.push(`  Chunks: ${s.totalChunks} (${s.succeededChunks} ok, ${s.failedChunks} failed)`);
-		lines.push(`  Total duration: ${s.totalDurationMs.toFixed(0)}ms`);
-		lines.push(`  Avg per chunk: ${s.averageDurationMsPerChunk.toFixed(1)}ms`);
-		lines.push(`  Total attempts: ${s.totalAttempts}`);
-		lines.push("");
-	}
-	return lines.join("\n");
-}
-//#endregion
 //#region src/cli/commands/benchmark.ts
 function runBenchmarkCommand(flags, deps) {
 	return Effect.gen(function* () {
-		yield* deps.errorLogger("Warning: This will make real API calls to the configured model provider(s) and may incur cost.");
+		yield* deps.errorLogger(formatError("Warning: This will make real API calls to the configured model provider(s) and may incur cost.", detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
 		const loaded = yield* deps.configLoader(flags.config);
 		const effective = resolveEffectiveConfig({ adapter: Option.getOrUndefined(flags.adapter) }, loaded);
 		const strategyNames = Option.getOrElse(flags.strategies, () => "one-shot,tool-loop-agent").split(",").map((s) => s.trim());
@@ -335,8 +364,17 @@ function runBenchmarkCommand(flags, deps) {
 			chunks: sampled,
 			concurrency: effective.chunking.concurrency
 		});
-		const report = deps.reportFormatter(summaries, Option.getOrUndefined(flags.format) === "json" ? "json" : "table");
-		yield* deps.logger(report);
+		const format = detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0);
+		const entries = summaries.map((s) => ({
+			strategyName: s.strategyName,
+			totalChunks: s.totalChunks,
+			succeededChunks: s.succeededChunks,
+			failedChunks: s.failedChunks,
+			totalDurationMs: s.totalDurationMs,
+			averageDurationMsPerChunk: s.averageDurationMsPerChunk,
+			totalAttempts: s.totalAttempts
+		}));
+		yield* deps.logger(formatBenchmark(entries, format));
 	});
 }
 const benchmarkCommand = Command.make("benchmark", {
@@ -350,7 +388,6 @@ const benchmarkCommand = Command.make("benchmark", {
 	modelResolver: resolveModel,
 	missingKeysComputer: computeMissingKeys,
 	benchmarkRunner: runBenchmark,
-	reportFormatter: formatBenchmarkReport,
 	logger: (msg) => Console.log(msg),
 	errorLogger: (msg) => Console.error(msg)
 }));

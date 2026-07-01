@@ -1,5 +1,5 @@
 import { Command, Options, Args } from '@effect/cli';
-import { Effect, Console } from 'effect';
+import { Effect, Console, Option } from 'effect';
 import { loadConfig } from '../../config/load-config.js';
 import { resolveEffectiveConfig } from '../config-resolution.js';
 import { resolveModel } from '../../translation/model-registry.js';
@@ -7,6 +7,7 @@ import { createOneShotStrategy } from '../../translation/one-shot-strategy.js';
 import { createToolLoopStrategy } from '../../translation/tool-loop-strategy.js';
 import { runTranslation } from '../../translation/orchestrator.js';
 import { flattenObject } from '../../keys/flatten.js';
+import { detectFormat, formatAdd, formatError, type OutputFormat } from '../format.js';
 import type { DialektConfig } from '../../config/types.js';
 import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
 import type { TranslationStrategy } from '../../translation/types.js';
@@ -14,6 +15,7 @@ import type { TranslationStrategy } from '../../translation/types.js';
 export interface AddFlags {
   readonly config: string;
   readonly create: boolean;
+  readonly format?: Option.Option<string>;
 }
 
 export function parseAddTokens(
@@ -67,10 +69,12 @@ export function runAdd(
 
     const entriesByResource = yield* parseAddTokens(tokens, errorLogger);
 
+    const addedResources: string[] = [];
     for (const adapter of effective.adapters) {
       for (const [resourceKey, entries] of Object.entries(entriesByResource)) {
         const resourceRef = { key: resourceKey, label: resourceKey };
         yield* adapter.writeResource(effective.sourceLocale, resourceRef, entries);
+        addedResources.push(`${adapter.name}/${effective.sourceLocale}/${resourceKey}`);
       }
     }
 
@@ -89,14 +93,30 @@ export function runAdd(
       chunking: effective.chunking,
     });
 
-    yield* logger('Add + translate complete.');
+    const format = detectFormat(
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
+    );
+
+    yield* logger(
+      formatAdd(
+        {
+          success: true,
+          message: 'Add + translate complete.',
+          addedResources,
+        },
+        format,
+      ),
+    );
   });
 }
 
 export const addCommand = Command.make('add', {
   config: Options.text('config').pipe(Options.withDefault('./dialekt.config.ts')),
   create: Options.boolean('create'),
-}, ({ config, create }) => {
+  format: Options.optional(Options.text('format')),
+}, ({ config, create, format }) => {
   const rawTokens = process.argv.slice(3).filter((t: string) => !t.startsWith('--') && !t.startsWith('-'));
-  return runAdd({ config, create }, rawTokens);
+  return runAdd({ config, create, format }, rawTokens);
 });

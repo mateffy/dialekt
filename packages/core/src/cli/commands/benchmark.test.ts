@@ -57,8 +57,6 @@ describe('runBenchmarkCommand', () => {
             totalAttempts: 1,
           } as StrategyBenchmarkSummary,
         ]),
-      reportFormatter: (summaries, format) =>
-        format === 'json' ? JSON.stringify(summaries) : `table: ${summaries.length}`,
       logger: () => Effect.void,
       errorLogger: () => Effect.void,
       ...overrides,
@@ -77,7 +75,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -102,7 +99,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -127,7 +123,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.some('tool-loop-agent'),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -163,7 +158,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.some(1),
-        format: Option.none(),
       },
       deps,
     );
@@ -175,8 +169,6 @@ describe('runBenchmarkCommand', () => {
   it('outputs JSON report when --format json is passed', async () => {
     const logs: string[] = [];
     const deps = makeDeps({
-      reportFormatter: (summaries, format) =>
-        format === 'json' ? JSON.stringify(summaries) : 'table',
       logger: (msg) => Effect.sync(() => logs.push(msg)),
     });
 
@@ -192,13 +184,15 @@ describe('runBenchmarkCommand', () => {
     );
 
     await Effect.runPromise(program);
-    expect(logs[0]).toContain('strategyName');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed).toBeInstanceOf(Array);
+    expect(parsed[0]).toMatchObject({ strategyName: 'one-shot' });
   });
 
-  it('outputs table report by default', async () => {
+  it('outputs benchmark data by default', async () => {
     const logs: string[] = [];
     const deps = makeDeps({
-      reportFormatter: (_summaries, format) => `format=${format}`,
       logger: (msg) => Effect.sync(() => logs.push(msg)),
     });
 
@@ -208,13 +202,14 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
 
     await Effect.runPromise(program);
-    expect(logs).toContain('format=table');
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed).toBeInstanceOf(Array);
   });
 
   it('filters adapters by --adapter flag', async () => {
@@ -237,7 +232,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.some('a2'),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -257,7 +251,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -276,7 +269,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -295,7 +287,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
@@ -308,6 +299,7 @@ describe('runBenchmarkCommand', () => {
     const config = { ...baseConfig, adapters: [] };
     const deps = makeDeps({
       configLoader: () => Effect.succeed(config),
+      benchmarkRunner: () => Effect.succeed([]),
       logger: (msg) => Effect.sync(() => logs.push(msg)),
     });
 
@@ -317,13 +309,14 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );
 
     await Effect.runPromise(program);
-    expect(logs).toHaveLength(1); // just the report
+    expect(logs).toHaveLength(1);
+    const parsed = JSON.parse(logs[0]!);
+    expect(parsed).toEqual([]);
   });
 
   it('handles adapter with no missing keys', async () => {
@@ -343,7 +336,6 @@ describe('runBenchmarkCommand', () => {
         adapter: Option.none(),
         strategies: Option.none(),
         sampleSize: Option.none(),
-        format: Option.none(),
       },
       deps,
     );

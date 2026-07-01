@@ -20,7 +20,7 @@ export interface TranslateFlags {
   readonly skipNames: boolean;
   readonly skipLanguages: boolean;
   readonly fast: boolean;
-  readonly format: Option.Option<string>;
+  readonly format?: Option.Option<string>;
 }
 
 export function runTranslate(
@@ -69,7 +69,9 @@ export function runTranslate(
     });
 
     const format = detectFormat(
-      Option.getOrUndefined(flags.format) as OutputFormat | undefined,
+      flags.format !== undefined
+        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
+        : undefined,
     );
 
     yield* logger(

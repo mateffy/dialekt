@@ -278,4 +278,283 @@ function loadConfig(configPath) {
 	});
 }
 //#endregion
-export { createToolLoopStrategy as a, buildUserPrompt as c, resolveModel as d, chunkKeys as f, unflattenObject as h, runTranslation as i, TranslationFailedError as l, flattenObject as m, loadConfig as n, createOneShotStrategy as o, diffKeys as p, computeMissingKeys as r, buildSystemPrompt as s, ConfigLoadError as t, UnknownProviderError as u };
+//#region src/cli/format.ts
+/**
+* Environment variables that signal dialekt is running inside an AI agent.
+* When any is set (truthy), or stdout is not a TTY, JSON mode is the default.
+*/
+const AGENT_ENV_VARS = [
+	"CLAUDE_CODE",
+	"CLAUDECODE",
+	"CURSOR",
+	"CURSOR_TRACE_ID",
+	"DEVIN",
+	"GEMINI_CLI",
+	"AGENT_TASK_ID",
+	"AIDER_CHAT"
+];
+/**
+* Resolves the output format from explicit flag and environment.
+* Precedence: explicit `--format` > auto-detection.
+*
+* Auto-detection picks `json` when stdout is not a TTY or an agent env var
+* is present; otherwise `pretty`.
+*/
+function detectFormat(explicit) {
+	if (explicit !== void 0) return explicit;
+	if (!process.stdout.isTTY) return "json";
+	if (AGENT_ENV_VARS.some((k) => process.env[k])) return "json";
+	return "pretty";
+}
+const C = {
+	reset: "\x1B[0m",
+	bold: "\x1B[1m",
+	dim: "\x1B[2m",
+	red: "\x1B[31m",
+	green: "\x1B[32m",
+	yellow: "\x1B[33m",
+	blue: "\x1B[34m",
+	cyan: "\x1B[36m",
+	white: "\x1B[37m"
+};
+function isTty() {
+	return process.stdout.isTTY === true;
+}
+/** Wraps text in ANSI codes only when stdout is a TTY; otherwise returns it bare. */
+function color(text, ...codes) {
+	if (!isTty()) return text;
+	return `${codes.join("")}${text}${C.reset}`;
+}
+const PRETTY_GLYPHS = {
+	hLine: String.fromCharCode(9472),
+	vLine: String.fromCharCode(9474),
+	cornerTL: String.fromCharCode(9484),
+	cornerTR: String.fromCharCode(9488),
+	cornerBL: String.fromCharCode(9492),
+	cornerBR: String.fromCharCode(9496),
+	teeRight: String.fromCharCode(9500),
+	teeLeft: String.fromCharCode(9508),
+	teeDown: String.fromCharCode(9516),
+	teeUp: String.fromCharCode(9524),
+	cross: String.fromCharCode(9532),
+	bullet: String.fromCharCode(8226),
+	arrow: String.fromCharCode(8594),
+	check: String.fromCharCode(10003),
+	crossMark: String.fromCharCode(10007),
+	warn: String.fromCharCode(9888)
+};
+const ASCII_GLYPHS = {
+	hLine: "-",
+	vLine: "|",
+	cornerTL: "+",
+	cornerTR: "+",
+	cornerBL: "+",
+	cornerBR: "+",
+	teeRight: "+",
+	teeLeft: "+",
+	teeDown: "+",
+	teeUp: "+",
+	cross: "+",
+	bullet: "*",
+	arrow: ">",
+	check: "+",
+	crossMark: "x",
+	warn: "!"
+};
+function glyphs() {
+	return isTty() ? PRETTY_GLYPHS : ASCII_GLYPHS;
+}
+function drawTable(headers, rows) {
+	const g = glyphs();
+	const colWidths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)));
+	const pad = (text, width) => text.padEnd(width);
+	const hLine = g.cornerTL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeDown) + g.cornerTR;
+	const headerRow = g.vLine + headers.map((h, i) => ` ${color(pad(h, colWidths[i]), C.bold)} `).join(g.vLine) + g.vLine;
+	const separator = g.teeRight + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.cross) + g.teeLeft;
+	const dataRows = rows.map((row) => g.vLine + row.map((cell, i) => ` ${pad(cell, colWidths[i])} `).join(g.vLine) + g.vLine);
+	const bottomLine = g.cornerBL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeUp) + g.cornerBR;
+	return [
+		hLine,
+		headerRow,
+		separator,
+		...dataRows,
+		bottomLine
+	].join("\n");
+}
+function banner(title) {
+	const line = glyphs().hLine.repeat(Math.max(title.length + 4, 40));
+	return `${color(line, C.dim)}\n  ${color(title, C.bold + C.cyan)}\n${color(line, C.dim)}`;
+}
+function sectionHeader(label) {
+	return `\n${color(`${glyphs().arrow} ${label}`, C.bold + C.cyan)}`;
+}
+function success(text) {
+	return `${color(`${glyphs().check} ${text}`, C.green)}`;
+}
+function failure(text) {
+	return `${color(`${glyphs().crossMark} ${text}`, C.red)}`;
+}
+function warning(text) {
+	return `${color(`${glyphs().warn} ${text}`, C.yellow)}`;
+}
+function info(text) {
+	return color(text, C.dim);
+}
+function keyValue(key, value) {
+	return `  ${color(key, C.bold)} ${value}`;
+}
+function formatMissingKeys(entries, format) {
+	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
+	if (entries.length === 0) return success("All translations are complete. No missing keys.") + "\n";
+	const grouped = /* @__PURE__ */ new Map();
+	for (const e of entries) {
+		const byAdapter = grouped.get(e.adapter) ?? /* @__PURE__ */ new Map();
+		const byLocale = byAdapter.get(e.locale) ?? /* @__PURE__ */ new Map();
+		const keys = byLocale.get(e.resource) ?? [];
+		keys.push(e.key);
+		byLocale.set(e.resource, keys);
+		byAdapter.set(e.locale, byLocale);
+		grouped.set(e.adapter, byAdapter);
+	}
+	const lines = [];
+	const g = glyphs();
+	const total = entries.length;
+	lines.push(sectionHeader(`Missing keys (${total})`));
+	for (const [adapter, byLocale] of grouped) {
+		let adapterTotal = 0;
+		for (const byResource of byLocale.values()) for (const keys of byResource.values()) adapterTotal += keys.length;
+		lines.push(`\n  ${color(adapter, C.bold + C.blue)} ${color(`(${adapterTotal})`, C.dim)}`);
+		for (const [locale, byResource] of byLocale) {
+			let localeTotal = 0;
+			for (const keys of byResource.values()) localeTotal += keys.length;
+			lines.push(`    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`);
+			for (const [resource, keys] of byResource) {
+				lines.push(`      ${color(resource, C.bold)}`);
+				for (const key of keys) lines.push(`        ${color(g.bullet, C.dim)} ${key}`);
+			}
+		}
+	}
+	return lines.join("\n") + "\n";
+}
+function formatUnusedKeys(entries, format) {
+	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
+	if (entries.length === 0) return success("All keys are referenced in source files. No unused keys.") + "\n";
+	const grouped = /* @__PURE__ */ new Map();
+	for (const e of entries) {
+		const byAdapter = grouped.get(e.adapter) ?? /* @__PURE__ */ new Map();
+		const byLocale = byAdapter.get(e.locale) ?? /* @__PURE__ */ new Map();
+		const keys = byLocale.get(e.resource) ?? [];
+		keys.push(e.key);
+		byLocale.set(e.resource, keys);
+		byAdapter.set(e.locale, byLocale);
+		grouped.set(e.adapter, byAdapter);
+	}
+	const lines = [];
+	const g = glyphs();
+	const total = entries.length;
+	lines.push(sectionHeader(`Unused keys (${total})`));
+	for (const [adapter, byLocale] of grouped) {
+		let adapterTotal = 0;
+		for (const byResource of byLocale.values()) for (const keys of byResource.values()) adapterTotal += keys.length;
+		lines.push(`\n  ${color(adapter, C.bold + C.blue)} ${color(`(${adapterTotal})`, C.dim)}`);
+		for (const [locale, byResource] of byLocale) {
+			let localeTotal = 0;
+			for (const keys of byResource.values()) localeTotal += keys.length;
+			lines.push(`    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`);
+			for (const [resource, keys] of byResource) {
+				lines.push(`      ${color(resource, C.bold)}`);
+				for (const key of keys) lines.push(`        ${color(g.bullet, C.dim)} ${key}`);
+			}
+		}
+	}
+	return lines.join("\n") + "\n";
+}
+function formatValidate(result, format) {
+	if (format === "json") return JSON.stringify(result, null, 2) + "\n";
+	if (result.passing) return "\n" + success("All translations are up to date.") + "\n";
+	const rows = result.entries.map((e) => [
+		e.adapter,
+		e.locale,
+		e.resource,
+		e.count.toString()
+	]);
+	const lines = [];
+	lines.push(failure(`Missing keys found in ${result.entries.length} resource(s)`));
+	lines.push("");
+	lines.push(drawTable([
+		"Adapter",
+		"Locale",
+		"Resource",
+		"Missing"
+	], rows));
+	lines.push("");
+	lines.push(color(`Run ${color("dialekt translate", C.bold + C.cyan)} to fill missing keys.`, C.dim));
+	return lines.join("\n") + "\n";
+}
+function formatLanguages(entries, format) {
+	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
+	if (entries.length === 0) return warning("No adapters configured.") + "\n";
+	const lines = [];
+	const g = glyphs();
+	for (const e of entries) {
+		lines.push(`  ${color(e.adapter, C.bold + C.blue)}`);
+		lines.push(`    ${color(`${g.arrow}`, C.dim)} ${e.locales.join(color(", ", C.dim))}`);
+	}
+	return lines.join("\n") + "\n";
+}
+function formatTranslate(result, format) {
+	if (format === "json") return JSON.stringify(result, null, 2) + "\n";
+	if (result.success) {
+		const lines = [success(result.message)];
+		if (result.stats) {
+			lines.push("");
+			lines.push(keyValue("Adapters:", result.stats.adaptersProcessed.toString()));
+			lines.push(keyValue("Locales:", result.stats.localesTranslated.toString()));
+			lines.push(keyValue("Keys:", result.stats.keysTranslated.toString()));
+		}
+		return lines.join("\n") + "\n";
+	}
+	return failure(result.message) + "\n";
+}
+function formatAdd(result, format) {
+	if (format === "json") return JSON.stringify(result, null, 2) + "\n";
+	if (result.success) {
+		const lines = [success(result.message)];
+		if (result.addedResources && result.addedResources.length > 0) {
+			lines.push("");
+			lines.push(color("Added to:", C.dim));
+			for (const r of result.addedResources) lines.push(`  ${color(glyphs().bullet, C.dim)} ${r}`);
+		}
+		return lines.join("\n") + "\n";
+	}
+	return failure(result.message) + "\n";
+}
+function formatBenchmark(entries, format) {
+	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
+	if (entries.length === 0) return warning("No benchmark data available.") + "\n";
+	const lines = [];
+	glyphs();
+	lines.push(banner("Benchmark Results"));
+	const rows = entries.map((e) => [
+		e.strategyName,
+		`${e.succeededChunks}/${e.totalChunks}`,
+		`${e.totalDurationMs.toFixed(0)}ms`,
+		`${e.averageDurationMsPerChunk.toFixed(1)}ms`,
+		e.totalAttempts.toString()
+	]);
+	lines.push("");
+	lines.push(drawTable([
+		"Strategy",
+		"Chunks",
+		"Total",
+		"Avg/Chunk",
+		"Attempts"
+	], rows));
+	return lines.join("\n") + "\n";
+}
+function formatError(message, format) {
+	if (format === "json") return JSON.stringify({ error: message }, null, 2) + "\n";
+	return failure(message) + "\n";
+}
+//#endregion
+export { resolveModel as A, runTranslation as C, buildUserPrompt as D, buildSystemPrompt as E, diffKeys as M, flattenObject as N, TranslationFailedError as O, unflattenObject as P, computeMissingKeys as S, createOneShotStrategy as T, sectionHeader as _, failure as a, ConfigLoadError as b, formatError as c, formatTranslate as d, formatUnusedKeys as f, keyValue as g, info as h, drawTable as i, chunkKeys as j, UnknownProviderError as k, formatLanguages as l, glyphs as m, color as n, formatAdd as o, formatValidate as p, detectFormat as r, formatBenchmark as s, banner as t, formatMissingKeys as u, success as v, createToolLoopStrategy as w, loadConfig as x, warning as y };
