@@ -2,7 +2,7 @@ import { defineArchitecture } from 'gesetz';
 
 export const layers = defineArchitecture({
   layers: [
-    { name: 'core', pattern: 'packages/core/src/**/*', canImportFrom: [] },
+    { name: 'core', pattern: 'packages/dialekt/src/**/*', canImportFrom: [] },
     { name: 'adapters', pattern: 'packages/adapter-*/src/**/*', canImportFrom: ['core'] },
   ],
   forbidden: [

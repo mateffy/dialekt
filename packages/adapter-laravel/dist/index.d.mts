@@ -1,4 +1,4 @@
-import { TranslationAdapter } from "@dialekt/core";
+import { TranslationAdapter } from "dialekt";
 
 //#region src/adapter.d.ts
 interface LaravelAdapterOptions {

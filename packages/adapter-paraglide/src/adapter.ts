@@ -6,12 +6,12 @@ import type {
   TranslationAdapter,
   AdapterReadError,
   AdapterWriteError,
-} from '@dialekt/core';
+} from 'dialekt';
 import {
   AdapterReadError as AdapterReadErrorClass,
   AdapterWriteError as AdapterWriteErrorClass,
   NodePlatformLayer,
-} from '@dialekt/core';
+} from 'dialekt';
 import { readMessageFile, writeMessageFile } from './message-file.js';
 import { findUnusedParaglideKeys } from './unused-keys.js';
 

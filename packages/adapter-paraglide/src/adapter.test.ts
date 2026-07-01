@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import { NodePlatformLayer } from '@dialekt/core';
+import { NodePlatformLayer } from 'dialekt';
 import { paraglide } from './adapter.js';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

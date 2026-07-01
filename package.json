@@ -10,7 +10,7 @@
     "check": "gesetz check"
   },
   "devDependencies": {
-    "@dialekt/core": "workspace:*",
+    "dialekt": "workspace:*",
     "@dialekt/adapter-laravel": "workspace:*",
     "@dialekt/adapter-paraglide": "workspace:*",
     "@effect/vitest": "^0.29.0",

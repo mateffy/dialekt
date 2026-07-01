@@ -306,7 +306,7 @@ function detectFormat(explicit) {
 	if (AGENT_ENV_VARS.some((k) => process.env[k])) return "json";
 	return "pretty";
 }
-const C = {
+const C$1 = {
 	reset: "\x1B[0m",
 	bold: "\x1B[1m",
 	dim: "\x1B[2m",
@@ -323,7 +323,7 @@ function isTty() {
 /** Wraps text in ANSI codes only when stdout is a TTY; otherwise returns it bare. */
 function color(text, ...codes) {
 	if (!isTty()) return text;
-	return `${codes.join("")}${text}${C.reset}`;
+	return `${codes.join("")}${text}${C$1.reset}`;
 }
 const PRETTY_GLYPHS = {
 	hLine: String.fromCharCode(9472),
@@ -369,7 +369,7 @@ function drawTable(headers, rows) {
 	const colWidths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)));
 	const pad = (text, width) => text.padEnd(width);
 	const hLine = g.cornerTL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeDown) + g.cornerTR;
-	const headerRow = g.vLine + headers.map((h, i) => ` ${color(pad(h, colWidths[i]), C.bold)} `).join(g.vLine) + g.vLine;
+	const headerRow = g.vLine + headers.map((h, i) => ` ${color(pad(h, colWidths[i]), C$1.bold)} `).join(g.vLine) + g.vLine;
 	const separator = g.teeRight + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.cross) + g.teeLeft;
 	const dataRows = rows.map((row) => g.vLine + row.map((cell, i) => ` ${pad(cell, colWidths[i])} `).join(g.vLine) + g.vLine);
 	const bottomLine = g.cornerBL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeUp) + g.cornerBR;
@@ -383,26 +383,44 @@ function drawTable(headers, rows) {
 }
 function banner(title) {
 	const line = glyphs().hLine.repeat(Math.max(title.length + 4, 40));
-	return `${color(line, C.dim)}\n  ${color(title, C.bold + C.cyan)}\n${color(line, C.dim)}`;
+	return `${color(line, C$1.dim)}\n  ${color(title, C$1.bold + C$1.cyan)}\n${color(line, C$1.dim)}`;
 }
 function sectionHeader(label) {
-	return `\n${color(`${glyphs().arrow} ${label}`, C.bold + C.cyan)}`;
+	return `\n${color(`${glyphs().arrow} ${label}`, C$1.bold + C$1.cyan)}`;
 }
 function success(text) {
-	return `${color(`${glyphs().check} ${text}`, C.green)}`;
+	return `${color(`${glyphs().check} ${text}`, C$1.green)}`;
 }
 function failure(text) {
-	return `${color(`${glyphs().crossMark} ${text}`, C.red)}`;
+	return `${color(`${glyphs().crossMark} ${text}`, C$1.red)}`;
 }
 function warning(text) {
-	return `${color(`${glyphs().warn} ${text}`, C.yellow)}`;
+	return `${color(`${glyphs().warn} ${text}`, C$1.yellow)}`;
 }
 function info(text) {
-	return color(text, C.dim);
+	return color(text, C$1.dim);
 }
 function keyValue(key, value) {
-	return `  ${color(key, C.bold)} ${value}`;
+	return `  ${color(key, C$1.bold)} ${value}`;
 }
+//#endregion
+//#region src/cli/formatters.ts
+/**
+* Command-specific formatters for the dialekt CLI output.
+*
+* Imports the core utilities from `format.ts` and builds structured
+* pretty / JSON renderers for each dialekt command.
+*/
+const C = {
+	reset: "\x1B[0m",
+	bold: "\x1B[1m",
+	dim: "\x1B[2m",
+	red: "\x1B[31m",
+	green: "\x1B[32m",
+	yellow: "\x1B[33m",
+	blue: "\x1B[34m",
+	cyan: "\x1B[36m"
+};
 function formatMissingKeys(entries, format) {
 	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
 	if (entries.length === 0) return success("All translations are complete. No missing keys.") + "\n";
@@ -533,7 +551,6 @@ function formatBenchmark(entries, format) {
 	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
 	if (entries.length === 0) return warning("No benchmark data available.") + "\n";
 	const lines = [];
-	glyphs();
 	lines.push(banner("Benchmark Results"));
 	const rows = entries.map((e) => [
 		e.strategyName,
@@ -557,4 +574,4 @@ function formatError(message, format) {
 	return failure(message) + "\n";
 }
 //#endregion
-export { resolveModel as A, runTranslation as C, buildUserPrompt as D, buildSystemPrompt as E, diffKeys as M, flattenObject as N, TranslationFailedError as O, unflattenObject as P, computeMissingKeys as S, createOneShotStrategy as T, sectionHeader as _, failure as a, ConfigLoadError as b, formatError as c, formatTranslate as d, formatUnusedKeys as f, keyValue as g, info as h, drawTable as i, chunkKeys as j, UnknownProviderError as k, formatLanguages as l, glyphs as m, color as n, formatAdd as o, formatValidate as p, detectFormat as r, formatBenchmark as s, banner as t, formatMissingKeys as u, success as v, createToolLoopStrategy as w, loadConfig as x, warning as y };
+export { resolveModel as A, runTranslation as C, buildUserPrompt as D, buildSystemPrompt as E, diffKeys as M, flattenObject as N, TranslationFailedError as O, unflattenObject as P, computeMissingKeys as S, createOneShotStrategy as T, sectionHeader as _, formatMissingKeys as a, ConfigLoadError as b, formatValidate as c, detectFormat as d, drawTable as f, keyValue as g, info as h, formatLanguages as i, chunkKeys as j, UnknownProviderError as k, banner as l, glyphs as m, formatBenchmark as n, formatTranslate as o, failure as p, formatError as r, formatUnusedKeys as s, formatAdd as t, color as u, success as v, createToolLoopStrategy as w, loadConfig as x, warning as y };

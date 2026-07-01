@@ -2,28 +2,43 @@ import { Command, Options } from '@effect/cli';
 import { Effect, Console, Option } from 'effect';
 import { loadConfig } from '../../config/load-config.js';
 import { resolveEffectiveConfig } from '../config-resolution.js';
-import { detectFormat, formatUnusedKeys, formatError, type OutputFormat } from '../format.js';
+import { computeMissingKeys } from '../../translation/missing-keys.js';
+import { detectFormat, type OutputFormat } from '../format.js';
+import { formatMissingKeys } from '../formatters.js';
 import type { DialektConfig } from '../../config/types.js';
-import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
+import type { TranslationAdapter } from '../../adapter/types.js';
 
-export interface UnusedFlags {
+export interface MissingFlags {
   readonly config: string;
   readonly adapter: Option.Option<string>;
   readonly baseLanguage: Option.Option<string>;
+  readonly language: Option.Option<string>;
   readonly format?: Option.Option<string>;
 }
 
-export function runUnused(
-  flags: UnusedFlags,
+export interface MissingKeysEntry {
+  readonly adapter: string;
+  readonly locale: string;
+  readonly resource: { label: string };
+  readonly missing: readonly string[];
+}
+
+export function runMissing(
+  flags: MissingFlags,
   configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
+  missingKeysComputer: (
+    adapter: TranslationAdapter,
+    sourceLocale: string,
+    targetLocales: readonly string[],
+  ) => Effect.Effect<readonly MissingKeysEntry[], unknown> = computeMissingKeys as unknown as typeof missingKeysComputer,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
-  errorLogger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.error(msg),
 ): Effect.Effect<void, never> {
   return Effect.gen(function* () {
     const loaded = yield* configLoader(flags.config);
     const effective = resolveEffectiveConfig(
       {
         baseLanguage: Option.getOrUndefined(flags.baseLanguage),
+        language: Option.isSome(flags.language) ? [flags.language.value] : undefined,
         adapter: Option.getOrUndefined(flags.adapter),
       },
       loaded,
@@ -37,31 +52,17 @@ export function runUnused(
     }> = [];
 
     for (const a of effective.adapters) {
-      if (!a.capabilities.unusedKeyDetection) {
-        yield* errorLogger(
-          formatError(
-            `Adapter '${a.name}' does not support unused-key detection.`,
-            detectFormat(
-              flags.format !== undefined
-                ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
-                : undefined,
-            ),
-          ),
-        );
-        continue;
-      }
-
       const locales = yield* a.listLocales();
       const sourceLocale = effective.sourceLocale;
-      const resources = yield* a.listResources(sourceLocale);
+      const targets = locales.filter((l) => l !== sourceLocale);
 
-      for (const resource of resources) {
-        const unused = yield* a.findUnusedKeys!(sourceLocale, resource);
-        for (const key of unused) {
+      const entries = yield* missingKeysComputer(a, sourceLocale, targets);
+      for (const entry of entries) {
+        for (const key of entry.missing) {
           allEntries.push({
-            adapter: a.name,
-            locale: sourceLocale,
-            resource: resource.label,
+            adapter: entry.adapter,
+            locale: entry.locale,
+            resource: entry.resource.label,
             key,
           });
         }
@@ -74,13 +75,14 @@ export function runUnused(
         : undefined,
     );
 
-    yield* logger(formatUnusedKeys(allEntries, format));
+    yield* logger(formatMissingKeys(allEntries, format));
   }).pipe(Effect.mapError((e) => e as never)) as Effect.Effect<void, never, never>;
 }
 
-export const unusedCommand = Command.make('unused', {
+export const missingCommand = Command.make('missing', {
   config: Options.text('config').pipe(Options.withDefault('./dialekt.config.ts')),
   adapter: Options.optional(Options.text('adapter')),
   baseLanguage: Options.optional(Options.text('base-language')),
+  language: Options.optional(Options.text('language')),
   format: Options.optional(Options.text('format')),
-}, (flags) => runUnused(flags));
+}, (flags) => runMissing(flags));

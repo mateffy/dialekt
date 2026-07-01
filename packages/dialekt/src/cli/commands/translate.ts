@@ -6,7 +6,8 @@ import { resolveModel } from '../../translation/model-registry.js';
 import { createOneShotStrategy } from '../../translation/one-shot-strategy.js';
 import { createToolLoopStrategy } from '../../translation/tool-loop-strategy.js';
 import { runTranslation } from '../../translation/orchestrator.js';
-import { detectFormat, formatTranslate, formatError, type OutputFormat } from '../format.js';
+import { detectFormat, type OutputFormat } from '../format.js';
+import { formatTranslate, formatError } from '../formatters.js';
 import type { DialektConfig } from '../../config/types.js';
 import type { TranslationStrategy } from '../../translation/types.js';
 

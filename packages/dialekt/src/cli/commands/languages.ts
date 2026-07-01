@@ -2,7 +2,8 @@ import { Command, Options } from '@effect/cli';
 import { Effect, Console, Option } from 'effect';
 import { loadConfig } from '../../config/load-config.js';
 import { resolveEffectiveConfig } from '../config-resolution.js';
-import { detectFormat, formatLanguages, type OutputFormat } from '../format.js';
+import { detectFormat, type OutputFormat } from '../format.js';
+import { formatLanguages } from '../formatters.js';
 import type { DialektConfig } from '../../config/types.js';
 import type { TranslationAdapter } from '../../adapter/types.js';
 

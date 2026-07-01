@@ -1,4 +1,4 @@
-import { defineConfig } from '@dialekt/core';
+import { defineConfig } from 'dialekt';
 import { laravel } from '@dialekt/adapter-laravel';
 
 export default defineConfig({

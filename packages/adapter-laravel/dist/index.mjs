@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { Path } from "@effect/platform/Path";
-import { AdapterReadError, AdapterWriteError, NodePlatformLayer, flattenObject, readFileIfExists, readPhpArrayAsJson, unflattenObject, writeFileEnsuringDir } from "@dialekt/core";
+import { AdapterReadError, AdapterWriteError, NodePlatformLayer, flattenObject, readFileIfExists, readPhpArrayAsJson, unflattenObject, writeFileEnsuringDir } from "dialekt";
 import { FileSystem, Path as Path$1 } from "@effect/platform";
 //#region src/php-array-writer.ts
 function phpVarExport(value) {

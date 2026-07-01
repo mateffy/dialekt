@@ -1,4 +1,4 @@
-import { defineConfig } from '@dialekt/core';
+import { defineConfig } from 'dialekt';
 import { paraglide } from '@dialekt/adapter-paraglide';
 
 export default defineConfig({

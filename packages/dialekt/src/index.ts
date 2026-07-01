@@ -22,14 +22,6 @@ export { computeMissingKeys } from './translation/missing-keys.js';
 export { loadConfig, ConfigLoadError } from './config/load-config.js';
 export {
   detectFormat,
-  formatMissingKeys,
-  formatUnusedKeys,
-  formatValidate,
-  formatLanguages,
-  formatTranslate,
-  formatAdd,
-  formatBenchmark,
-  formatError,
   color,
   glyphs,
   drawTable,
@@ -41,8 +33,18 @@ export {
   info,
   keyValue,
 } from './cli/format.js';
+export type { OutputFormat } from './cli/format.js';
+export {
+  formatMissingKeys,
+  formatUnusedKeys,
+  formatValidate,
+  formatLanguages,
+  formatTranslate,
+  formatAdd,
+  formatBenchmark,
+  formatError,
+} from './cli/formatters.js';
 export type {
-  OutputFormat,
   MissingKeyEntry,
   UnusedKeyEntry,
   ValidateEntry,
@@ -51,4 +53,4 @@ export type {
   TranslateResult,
   AddResult,
   BenchmarkEntry,
-} from './cli/format.js';
+} from './cli/formatters.js';

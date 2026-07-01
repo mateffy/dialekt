@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 import { FileSystem, Path } from '@effect/platform';
-import { NodePlatformLayer } from '@dialekt/core';
+import { NodePlatformLayer } from 'dialekt';
 import { listLaravelLocales, listLaravelResources } from './resources.js';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

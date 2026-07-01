@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@effect/platform": "^0.96.0",
-    "@dialekt/core": "workspace:*",
+    "dialekt": "workspace:*",
     "effect": "^3.21.0"
   },
   "devDependencies": {

@@ -4,4 +4,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@ai-sdk/anthropic@4.0.4'
 overrides:
-  '@dialekt/core': 'link:'
+  'dialekt': 'link:'

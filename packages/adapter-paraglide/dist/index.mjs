@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { Path } from "@effect/platform/Path";
 import { FileSystem } from "@effect/platform/FileSystem";
-import { AdapterReadError, AdapterWriteError, NodePlatformLayer, flattenObject, unflattenObject } from "@dialekt/core";
+import { AdapterReadError, AdapterWriteError, NodePlatformLayer, flattenObject, unflattenObject } from "dialekt";
 import { FileSystem as FileSystem$1, Path as Path$1 } from "@effect/platform";
 //#region src/message-file.ts
 function readMessageFile(path) {

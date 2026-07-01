@@ -1,6 +1,6 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
-import { flattenObject, unflattenObject } from '@dialekt/core';
+import { flattenObject, unflattenObject } from 'dialekt';
 
 export interface MessageFileResult {
   readonly translations: Record<string, string>;

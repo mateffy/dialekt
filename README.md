@@ -29,7 +29,7 @@ dialekt is an extendable harness, not a closed box. The core package handles chu
 ### 1. Install
 
 ```bash
-npm install -D @dialekt/core @dialekt/adapter-laravel
+npm install -D dialekt @dialekt/adapter-laravel
 ```
 
 Install only the adapters you use. If you also have a Paraglide frontend:
@@ -43,7 +43,7 @@ npm install -D @dialekt/adapter-paraglide
 Create `dialekt.config.ts` in your project root:
 
 ```ts
-import { defineConfig } from '@dialekt/core';
+import { defineConfig } from 'dialekt';
 import { laravel } from '@dialekt/adapter-laravel';
 
 export default defineConfig({
@@ -107,7 +107,7 @@ The monorepo is a pnpm workspace with three packages:
 
 | Package | What it exports |
 |---|---|
-| `@dialekt/core` | CLI, SDK, translation engine, benchmarking |
+| `dialekt` | CLI, SDK, translation engine, benchmarking |
 | `@dialekt/adapter-laravel` | PHP array + JSON adapter |
 | `@dialekt/adapter-paraglide` | inlang JSON adapter |
 

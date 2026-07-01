@@ -1,7 +1,7 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
-import type { AdapterReadError } from '@dialekt/core';
-import { AdapterReadError as AdapterReadErrorClass } from '@dialekt/core';
+import type { AdapterReadError } from 'dialekt';
+import { AdapterReadError as AdapterReadErrorClass } from 'dialekt';
 
 export function findUnusedLaravelKeys(
   scanPaths: readonly string[],

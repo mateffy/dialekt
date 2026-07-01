@@ -1,7 +1,7 @@
 import { FileSystem, Path } from '@effect/platform';
 import { Effect } from 'effect';
-import type { ResourceRef, AdapterReadError } from '@dialekt/core';
-import { AdapterReadError as AdapterReadErrorClass } from '@dialekt/core';
+import type { ResourceRef, AdapterReadError } from 'dialekt';
+import { AdapterReadError as AdapterReadErrorClass } from 'dialekt';
 
 export function listLaravelLocales(langDir: string) {
   return Effect.gen(function* () {

@@ -8,7 +8,8 @@ import { createToolLoopStrategy } from '../../translation/tool-loop-strategy.js'
 import { chunkKeys } from '../../translation/chunking.js';
 import { computeMissingKeys } from '../../translation/missing-keys.js';
 import { runBenchmark } from '../../benchmark/runner.js';
-import { detectFormat, formatBenchmark, formatError, type OutputFormat } from '../format.js';
+import { detectFormat, type OutputFormat } from '../format.js';
+import { formatBenchmark, formatError } from '../formatters.js';
 import type { DialektConfig } from '../../config/types.js';
 import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
 import type { TranslationStrategy, TranslationContext } from '../../translation/types.js';

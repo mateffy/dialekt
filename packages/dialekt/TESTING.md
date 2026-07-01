@@ -1,4 +1,4 @@
-# @dialekt/core Testing Guide
+# dialekt Testing Guide
 
 ## Tested Areas Map
 
@@ -59,7 +59,7 @@
 pnpm -r run test
 
 # Single package
-pnpm --filter @dialekt/core test
+pnpm --filter dialekt test
 
 # Single file
 npx vitest run src/translation/chunking.test.ts

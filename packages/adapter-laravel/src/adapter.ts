@@ -5,7 +5,7 @@ import type {
   TranslationAdapter,
   AdapterReadError,
   AdapterWriteError,
-} from '@dialekt/core';
+} from 'dialekt';
 import {
   AdapterReadError as AdapterReadErrorClass,
   AdapterWriteError as AdapterWriteErrorClass,
@@ -15,7 +15,7 @@ import {
   readPhpArrayAsJson,
   readFileIfExists,
   writeFileEnsuringDir,
-} from '@dialekt/core';
+} from 'dialekt';
 import { renderPhpFile } from './php-array-writer.js';
 import { listLaravelLocales, listLaravelResources } from './resources.js';
 import { findUnusedLaravelKeys } from './unused-keys.js';

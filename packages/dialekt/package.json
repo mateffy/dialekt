@@ -1,5 +1,5 @@
 {
-  "name": "@dialekt/core",
+  "name": "dialekt",
   "version": "0.1.0",
   "type": "module",
   "bin": {
@@ -20,7 +20,7 @@
     "@ai-sdk/anthropic": "^4.0.4",
     "@ai-sdk/google": "^4.0.3",
     "@ai-sdk/openai": "^4.0.4",
-    "@dialekt/core": "link:",
+    "dialekt": "link:",
     "@effect/cli": "^0.75.0",
     "@effect/platform": "^0.96.0",
     "@effect/platform-node": "^0.107.0",

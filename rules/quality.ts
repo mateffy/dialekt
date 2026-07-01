@@ -15,7 +15,7 @@ import {
 import { noRunPromiseScattered, noThrowInEffectGen } from '@gesetz/effect-ts';
 
 export const everyFileNeedsTest = select('packages/*/src/**/*.ts')
-  .exclude('**/*.test.ts', '**/index.ts', '**/*.config.ts', 'packages/core/src/cli/main.ts')
+  .exclude('**/*.test.ts', '**/index.ts', '**/*.config.ts', 'packages/dialekt/src/cli/main.ts')
   .label('Every source file needs a sibling .test.ts')
   .category('organization')
   .check(requireSibling('.test.ts'));
@@ -54,9 +54,9 @@ export const noSecrets = select('packages/*/src/**/*')
 export const noRawNodeIO = select('packages/*/src/**/*.ts')
   .exclude(
     '**/*.test.ts',
-    'packages/core/src/cli/main.ts',
-    'packages/core/src/sdk/node-layer.ts',
-    'packages/core/src/config/load-config.ts',
+    'packages/dialekt/src/cli/main.ts',
+    'packages/dialekt/src/sdk/node-layer.ts',
+    'packages/dialekt/src/config/load-config.ts',
   )
   .label('Use @effect/platform, not raw node:fs/node:child_process/node:path')
   .category('organization')
@@ -73,7 +73,7 @@ export const noRunPromiseOutsideEntryPoints = select('packages/*/src/**/*.ts')
   .category('organization')
   .check(
     noRunPromiseScattered({
-      entryPoints: ['packages/core/src/cli/main.ts', 'packages/core/src/sdk/node-layer.ts'],
+      entryPoints: ['packages/dialekt/src/cli/main.ts', 'packages/dialekt/src/sdk/node-layer.ts'],
     }),
   );
 

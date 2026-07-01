@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { A as resolveModel, C as runTranslation, S as computeMissingKeys, T as createOneShotStrategy, c as formatError, d as formatTranslate, f as formatUnusedKeys, j as chunkKeys, l as formatLanguages, o as formatAdd, p as formatValidate, r as detectFormat, s as formatBenchmark, u as formatMissingKeys, w as createToolLoopStrategy, x as loadConfig } from "../format-BJuqnDpW.mjs";
+import { A as resolveModel, C as runTranslation, S as computeMissingKeys, T as createOneShotStrategy, a as formatMissingKeys, c as formatValidate, d as detectFormat, i as formatLanguages, j as chunkKeys, n as formatBenchmark, o as formatTranslate, r as formatError, s as formatUnusedKeys, t as formatAdd, w as createToolLoopStrategy, x as loadConfig } from "../formatters-De4Q-X1d.mjs";
 import { Console, Effect, Option } from "effect";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command, Options } from "@effect/cli";

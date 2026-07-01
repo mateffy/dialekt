@@ -3,7 +3,8 @@ import { Effect, Console, Option } from 'effect';
 import { loadConfig } from '../../config/load-config.js';
 import { resolveEffectiveConfig } from '../config-resolution.js';
 import { computeMissingKeys } from '../../translation/missing-keys.js';
-import { detectFormat, formatValidate, formatError, type OutputFormat } from '../format.js';
+import { detectFormat, type OutputFormat } from '../format.js';
+import { formatValidate, formatError } from '../formatters.js';
 import type { DialektConfig } from '../../config/types.js';
 import type { TranslationAdapter, ResourceRef } from '../../adapter/types.js';
 

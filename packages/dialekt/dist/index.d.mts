@@ -191,7 +191,7 @@ interface TranslationRunConfig {
   readonly targetLocales: readonly string[];
   readonly chunking: ChunkingConfig;
 }
-declare function runTranslation(config: TranslationRunConfig): Effect.Effect<undefined, TranslationFailedError | AdapterReadError | AdapterWriteError, never>;
+declare function runTranslation(config: TranslationRunConfig): Effect.Effect<undefined, AdapterReadError | AdapterWriteError | TranslationFailedError, never>;
 //#endregion
 //#region src/translation/prompt.d.ts
 declare function buildSystemPrompt(from: string, to: string): string;
@@ -218,7 +218,7 @@ declare function loadConfig(configPath: string): Effect.Effect<DialektConfig, Co
 //#endregion
 //#region src/cli/format.d.ts
 /**
- * Terminal formatting helpers for the dialekt CLI output.
+ * Terminal formatting core utilities for the dialekt CLI output.
  *
  * Two output modes:
  *   - `pretty` — lush human-readable output with colours and grouping (TTY only)
@@ -266,6 +266,8 @@ declare function failure(text: string): string;
 declare function warning(text: string): string;
 declare function info(text: string): string;
 declare function keyValue(key: string, value: string): string;
+//#endregion
+//#region src/cli/formatters.d.ts
 interface MissingKeyEntry {
   readonly adapter: string;
   readonly locale: string;
