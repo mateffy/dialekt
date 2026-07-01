@@ -167,9 +167,12 @@ export function drawTable(
 
 // ─── Banner / header helpers ─────────────────────────────────────────────────
 
+const BANNER_SIDE_PADDING = 4;
+const BANNER_MIN_WIDTH = 40;
+
 export function banner(title: string): string {
   const g = glyphs();
-  const line = g.hLine.repeat(Math.max(title.length + 4, 40));
+  const line = g.hLine.repeat(Math.max(title.length + BANNER_SIDE_PADDING, BANNER_MIN_WIDTH));
   return `${color(line, C.dim)}\n  ${color(title, C.bold + C.cyan)}\n${color(line, C.dim)}`;
 }
 

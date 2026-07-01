@@ -12,6 +12,7 @@ Initial release of the dialekt AI translation toolkit.
 ### Added
 
 **Core package (`dialekt`)**
+
 - `defineConfig()` — typed configuration with `sourceLocale`, `targetLocales`,
   `model`, `fastModel`, `chunking`, `retry`, and `adapters`.
 - `loadConfig()` — loads `dialekt.config.ts` via `jiti`, resolves from cwd so
@@ -33,6 +34,7 @@ Initial release of the dialekt AI translation toolkit.
 - 293 passing tests.
 
 **Laravel adapter (`@dialekt/adapter-laravel`)**
+
 - Reads and writes PHP array files (`lang/{locale}/{resource}.php`) via a
   PHP subprocess + `var_export()` round-trip that preserves comments and
   formatting.
@@ -42,12 +44,14 @@ Initial release of the dialekt AI translation toolkit.
 - 28 passing tests.
 
 **Paraglide adapter (`@dialekt/adapter-paraglide`)**
+
 - Reads and writes inlang message-format JSON files (`messages/{locale}.json`).
 - Scans `.ts`, `.tsx`, `.svelte`, and `.vue` source files for `m.key()`
   references to detect unused keys.
 - 18 passing tests.
 
 **Tooling**
+
 - pnpm workspace with `packages/*` layout.
 - tsdown (Rolldown-based) for bundling every package to ESM + TypeScript
   declarations.
@@ -56,6 +60,7 @@ Initial release of the dialekt AI translation toolkit.
 - oxfmt for formatting.
 
 **Examples**
+
 - `examples/laravel/` — working Laravel project with `en`, `de`, and `fr`
   locales, pre-wired `dialekt.config.ts`.
 - `examples/paraglide/` — working Paraglide project with `en`, `de`, `fr`,

@@ -278,6 +278,56 @@ export function formatAdd(result: AddResult, format: OutputFormat): string {
   return failure(result.message) + "\n";
 }
 
+// ─── Init formatter ─────────────────────────────────────────────────────────
+
+export interface InitResult {
+  readonly success: boolean;
+  readonly message: string;
+  readonly configPath?: string;
+  readonly packageManager?: string;
+  readonly installed?: readonly string[];
+  readonly skippedInstall?: boolean;
+}
+
+export function formatInit(result: InitResult, format: OutputFormat): string {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2) + "\n";
+  }
+
+  if (!result.success) {
+    return failure(result.message) + "\n";
+  }
+
+  const lines: string[] = [];
+  lines.push(success(result.message));
+
+  if (result.configPath) {
+    lines.push("");
+    lines.push(keyValue("Config:", result.configPath));
+  }
+
+  if (result.packageManager) {
+    lines.push(keyValue("Package manager:", result.packageManager));
+  }
+
+  if (result.installed && result.installed.length > 0) {
+    lines.push("");
+    lines.push(color("Installed:", C.dim));
+    for (const pkg of result.installed) {
+      lines.push(`  ${color(glyphs().bullet, C.dim)} ${pkg}`);
+    }
+  }
+
+  if (result.skippedInstall) {
+    lines.push("");
+    lines.push(
+      info("Install skipped. Run your package manager manually to install the packages above."),
+    );
+  }
+
+  return lines.join("\n") + "\n";
+}
+
 // ─── Benchmark formatter ─────────────────────────────────────────────────────
 
 export interface BenchmarkEntry {

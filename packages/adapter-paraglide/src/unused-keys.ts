@@ -3,7 +3,10 @@ import { Effect } from "effect";
 import type { AdapterReadError } from "dialekt";
 import { AdapterReadError as AdapterReadErrorClass } from "dialekt";
 
-export function findUnusedParaglideKeys(scanPaths: readonly string[], keys: readonly string[]) {
+export function findUnusedParaglideKeys(
+  scanPaths: readonly string[],
+  keys: readonly string[],
+): Effect.Effect<string[], AdapterReadError> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;

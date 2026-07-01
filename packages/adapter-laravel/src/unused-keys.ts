@@ -7,7 +7,7 @@ export function findUnusedLaravelKeys(
   scanPaths: readonly string[],
   domain: string,
   keys: readonly string[],
-) {
+): Effect.Effect<string[], AdapterReadError> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -40,13 +40,10 @@ export function findUnusedLaravelKeys(
           }
         }
 
+        const fullKeys = new Set(keys.map((key) => `${domain}.${key}`));
         for (const str of quotedStrings) {
-          for (const key of keys) {
-            const fullKey = `${domain}.${key}`;
-            // Match literal fullKey as a whole string (not substring).
-            if (str === fullKey) {
-              referenced.add(key);
-            }
+          if (fullKeys.has(str)) {
+            referenced.add(str.slice(domain.length + 1));
           }
         }
       }

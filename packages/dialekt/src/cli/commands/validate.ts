@@ -2,11 +2,11 @@ import { Command, Options } from "@effect/cli";
 import { Effect, Console, Option } from "effect";
 import { loadConfig } from "../../config/load-config.js";
 import { resolveEffectiveConfig } from "../config-resolution.js";
-import { computeMissingKeys } from "../../translation/missing-keys.js";
 import { detectFormat, type OutputFormat } from "../format.js";
 import { formatValidate, formatError } from "../formatters.js";
 import type { DialektConfig } from "../../config/types.js";
-import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
+import type { TranslationAdapter } from "../../adapter/types.js";
+import { computeMissingKeys, type MissingKeyEntry } from "../../translation/missing-keys.js";
 
 export interface ValidateFlags {
   readonly config: string;
@@ -16,12 +16,7 @@ export interface ValidateFlags {
   readonly format?: Option.Option<string>;
 }
 
-export interface MissingEntry {
-  readonly adapter: string;
-  readonly locale: string;
-  readonly resource: ResourceRef;
-  readonly missing: readonly string[];
-}
+export type MissingEntry = MissingKeyEntry;
 
 export function runValidate(
   flags: ValidateFlags,
@@ -30,10 +25,7 @@ export function runValidate(
     adapter: TranslationAdapter,
     sourceLocale: string,
     targetLocales: readonly string[],
-  ) => Effect.Effect<
-    readonly MissingEntry[],
-    unknown
-  > = computeMissingKeys as unknown as typeof missingKeysComputer,
+  ) => Effect.Effect<readonly MissingEntry[], unknown> = computeMissingKeys,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
 ): Effect.Effect<void, Error> {
   return Effect.gen(function* () {

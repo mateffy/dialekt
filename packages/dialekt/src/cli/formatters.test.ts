@@ -8,6 +8,7 @@ import {
   formatAdd,
   formatBenchmark,
   formatError,
+  formatInit,
 } from "./formatters.js";
 
 describe("formatMissingKeys", () => {
@@ -192,6 +193,59 @@ describe("formatBenchmark", () => {
     expect(result).toContain("Benchmark");
     expect(result).toContain("one-shot");
     expect(result).toContain("2/2");
+  });
+});
+
+describe("formatInit", () => {
+  it("returns JSON in json mode", () => {
+    const result = formatInit(
+      {
+        success: true,
+        message: "Initialized",
+        configPath: "./dialekt.config.ts",
+        packageManager: "pnpm",
+        installed: ["dialekt"],
+      },
+      "json",
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.success).toBe(true);
+    expect(parsed.configPath).toBe("./dialekt.config.ts");
+  });
+
+  it("returns failure text in pretty mode for errors", () => {
+    const result = formatInit({ success: false, message: "Already exists" }, "pretty");
+    expect(result).toContain("Already exists");
+  });
+
+  it("shows config path and packages in pretty mode", () => {
+    const result = formatInit(
+      {
+        success: true,
+        message: "dialekt initialized.",
+        configPath: "./dialekt.config.ts",
+        packageManager: "pnpm",
+        installed: ["dialekt", "@dialekt/adapter-laravel"],
+      },
+      "pretty",
+    );
+    expect(result).toContain("dialekt initialized");
+    expect(result).toContain("dialekt.config.ts");
+    expect(result).toContain("pnpm");
+    expect(result).toContain("@dialekt/adapter-laravel");
+  });
+
+  it("shows skipped install message", () => {
+    const result = formatInit(
+      {
+        success: true,
+        message: "dialekt initialized.",
+        configPath: "./dialekt.config.ts",
+        skippedInstall: true,
+      },
+      "pretty",
+    );
+    expect(result).toContain("skipped");
   });
 });
 

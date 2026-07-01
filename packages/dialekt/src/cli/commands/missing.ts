@@ -2,11 +2,11 @@ import { Command, Options } from "@effect/cli";
 import { Effect, Console, Option } from "effect";
 import { loadConfig } from "../../config/load-config.js";
 import { resolveEffectiveConfig } from "../config-resolution.js";
-import { computeMissingKeys } from "../../translation/missing-keys.js";
 import { detectFormat, type OutputFormat } from "../format.js";
 import { formatMissingKeys } from "../formatters.js";
 import type { DialektConfig } from "../../config/types.js";
 import type { TranslationAdapter } from "../../adapter/types.js";
+import { computeMissingKeys, type MissingKeyEntry } from "../../translation/missing-keys.js";
 
 export interface MissingFlags {
   readonly config: string;
@@ -16,12 +16,7 @@ export interface MissingFlags {
   readonly format?: Option.Option<string>;
 }
 
-export interface MissingKeysEntry {
-  readonly adapter: string;
-  readonly locale: string;
-  readonly resource: { label: string };
-  readonly missing: readonly string[];
-}
+export type MissingKeysEntry = MissingKeyEntry;
 
 export function runMissing(
   flags: MissingFlags,
@@ -30,10 +25,7 @@ export function runMissing(
     adapter: TranslationAdapter,
     sourceLocale: string,
     targetLocales: readonly string[],
-  ) => Effect.Effect<
-    readonly MissingKeysEntry[],
-    unknown
-  > = computeMissingKeys as unknown as typeof missingKeysComputer,
+  ) => Effect.Effect<readonly MissingKeysEntry[], unknown> = computeMissingKeys,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
 ): Effect.Effect<void, never> {
   return Effect.gen(function* () {

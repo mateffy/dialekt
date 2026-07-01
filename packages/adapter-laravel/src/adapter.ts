@@ -15,10 +15,97 @@ import { renderPhpFile } from "./php-array-writer.js";
 import { listLaravelLocales, listLaravelResources } from "./resources.js";
 import { findUnusedLaravelKeys } from "./unused-keys.js";
 
+function readError(locale: string, resourceKey: string, cause: unknown): AdapterReadError {
+  return new AdapterReadErrorClass({
+    adapter: "laravel",
+    locale,
+    resource: resourceKey,
+    cause,
+  }) as AdapterReadError;
+}
+
+function writeError(locale: string, resourceKey: string, cause: unknown): AdapterWriteError {
+  return new AdapterWriteErrorClass({
+    adapter: "laravel",
+    locale,
+    resource: resourceKey,
+    cause,
+  }) as AdapterWriteError;
+}
+
 export interface LaravelAdapterOptions {
   readonly langDir: string;
   readonly phpBinary?: string;
   readonly scanPaths?: readonly string[];
+}
+
+function readLaravelResource(
+  langDir: string,
+  locale: string,
+  resource: ResourceRef,
+): Effect.Effect<Record<string, string>, AdapterReadError, Path.Path> {
+  return Effect.gen(function* () {
+    const path = yield* Path;
+
+    if (resource.key === "json") {
+      const filePath = path.join(langDir, `${locale}.json`);
+      const content = yield* readFileIfExists(filePath).pipe(
+        Effect.mapError((cause) => readError(locale, resource.key, cause)),
+      );
+      if (content === null) return {};
+      return yield* Effect.try({
+        try: () => JSON.parse(content) as Record<string, string>,
+        catch: (cause) => readError(locale, resource.key, cause),
+      });
+    }
+
+    const filePath = path.join(langDir, locale, `${resource.key}.php`);
+    const result = yield* readPhpArrayAsJson(filePath).pipe(
+      Effect.catchTag("PhpExecutionError", () => Effect.succeed({})),
+      Effect.mapError((cause) => readError(locale, resource.key, cause)),
+    );
+    return flattenObject(result);
+  });
+}
+
+function writeLaravelResource(
+  langDir: string,
+  locale: string,
+  resource: ResourceRef,
+  entries: Record<string, string>,
+): Effect.Effect<void, AdapterWriteError, Path.Path> {
+  return Effect.gen(function* () {
+    const path = yield* Path;
+
+    if (resource.key === "json") {
+      const filePath = path.join(langDir, `${locale}.json`);
+      yield* writeFileEnsuringDir(filePath, JSON.stringify(entries, null, 2)).pipe(
+        Effect.mapError((cause) => writeError(locale, resource.key, cause)),
+      );
+      return;
+    }
+
+    const filePath = path.join(langDir, locale, `${resource.key}.php`);
+    const nested = unflattenObject(entries);
+    yield* writeFileEnsuringDir(filePath, renderPhpFile(nested)).pipe(
+      Effect.mapError((cause) => writeError(locale, resource.key, cause)),
+    );
+  });
+}
+
+function findUnusedLaravelAdapterKeys(
+  langDir: string,
+  scanPaths: readonly string[],
+  locale: string,
+  resource: ResourceRef,
+): Effect.Effect<readonly string[], AdapterReadError, Path.Path> {
+  return Effect.gen(function* () {
+    const path = yield* Path;
+    const adapterScanPaths = scanPaths.length > 0 ? scanPaths : [path.resolve(langDir, "..")];
+    const map = yield* readLaravelResource(langDir, locale, resource);
+    const keys = Object.keys(map);
+    return yield* findUnusedLaravelKeys(adapterScanPaths, resource.key, keys);
+  });
 }
 
 export function laravel(options: LaravelAdapterOptions): TranslationAdapter {
@@ -37,107 +124,18 @@ export function laravel(options: LaravelAdapterOptions): TranslationAdapter {
       listLaravelResources(langDir, locale).pipe(Effect.provide(NodePlatformLayer)),
 
     readResource: (locale, resource) =>
-      Effect.gen(function* () {
-        const path = yield* Path;
-
-        if (resource.key === "json") {
-          // JSON locale file
-          const filePath = path.join(langDir, `${locale}.json`);
-          const content = yield* readFileIfExists(filePath).pipe(
-            Effect.mapError(
-              (cause) =>
-                new AdapterReadErrorClass({
-                  adapter: "laravel",
-                  locale,
-                  resource: resource.key,
-                  cause,
-                }) as AdapterReadError,
-            ),
-          );
-          if (content === null) return {};
-          return yield* Effect.try({
-            try: () => JSON.parse(content) as Record<string, string>,
-            catch: (cause) =>
-              new AdapterReadErrorClass({
-                adapter: "laravel",
-                locale,
-                resource: resource.key,
-                cause,
-              }),
-          });
-        }
-
-        // PHP domain file
-        const filePath = path.join(langDir, locale, `${resource.key}.php`);
-        const result = yield* readPhpArrayAsJson(filePath).pipe(
-          Effect.catchTag("PhpExecutionError", () => Effect.succeed({})),
-          Effect.mapError(
-            (cause) =>
-              new AdapterReadErrorClass({
-                adapter: "laravel",
-                locale,
-                resource: resource.key,
-                cause,
-              }) as AdapterReadError,
-          ),
-        );
-        return flattenObject(result);
-      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<
-        Record<string, string>,
-        AdapterReadError,
-        never
-      >,
+      readLaravelResource(langDir, locale, resource).pipe(
+        Effect.provide([NodePlatformLayer]),
+      ) as Effect.Effect<Record<string, string>, AdapterReadError, never>,
 
     writeResource: (locale, resource, entries) =>
-      Effect.gen(function* () {
-        const path = yield* Path;
-
-        if (resource.key === "json") {
-          // JSON locale file
-          const filePath = path.join(langDir, `${locale}.json`);
-          yield* writeFileEnsuringDir(filePath, JSON.stringify(entries, null, 2)).pipe(
-            Effect.mapError(
-              (cause) =>
-                new AdapterWriteErrorClass({
-                  adapter: "laravel",
-                  locale,
-                  resource: resource.key,
-                  cause,
-                }) as AdapterWriteError,
-            ),
-          );
-          return;
-        }
-
-        // PHP domain file
-        const filePath = path.join(langDir, locale, `${resource.key}.php`);
-        const nested = unflattenObject(entries);
-        yield* writeFileEnsuringDir(filePath, renderPhpFile(nested)).pipe(
-          Effect.mapError(
-            (cause) =>
-              new AdapterWriteErrorClass({
-                adapter: "laravel",
-                locale,
-                resource: resource.key,
-                cause,
-              }) as AdapterWriteError,
-          ),
-        );
-      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<void, AdapterWriteError, never>,
+      writeLaravelResource(langDir, locale, resource, entries).pipe(
+        Effect.provide([NodePlatformLayer]),
+      ) as Effect.Effect<void, AdapterWriteError, never>,
 
     findUnusedKeys: (locale, resource) =>
-      Effect.gen(function* () {
-        const path = yield* Path;
-        const adapterScanPaths = scanPaths.length > 0 ? scanPaths : [path.resolve(langDir, "..")];
-        const keys = yield* Effect.gen(function* () {
-          const map = yield* laravel(options).readResource(locale, resource);
-          return Object.keys(map);
-        });
-        return yield* findUnusedLaravelKeys(adapterScanPaths, resource.key, keys);
-      }).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<
-        readonly string[],
-        AdapterReadError,
-        never
-      >,
+      findUnusedLaravelAdapterKeys(langDir, scanPaths, locale, resource).pipe(
+        Effect.provide([NodePlatformLayer]),
+      ) as Effect.Effect<readonly string[], AdapterReadError, never>,
   };
 }

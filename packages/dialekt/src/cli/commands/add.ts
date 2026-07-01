@@ -9,9 +9,10 @@ import { runTranslation } from "../../translation/orchestrator.js";
 import { flattenObject } from "../../keys/flatten.js";
 import { detectFormat, type OutputFormat } from "../format.js";
 import { formatAdd, formatError } from "../formatters.js";
-import type { DialektConfig } from "../../config/types.js";
+import type { DialektConfig, ChunkingConfig } from "../../config/types.js";
 import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
 import type { TranslationStrategy } from "../../translation/types.js";
+import type { TranslationRunConfig } from "../../translation/orchestrator.js";
 
 export interface AddFlags {
   readonly config: string;
@@ -57,13 +58,7 @@ export function runAdd(
     provider: string;
     modelId: string;
   }) => Effect.Effect<unknown, unknown> = resolveModel,
-  translationRunner: (opts: {
-    adapters: readonly unknown[];
-    strategy: TranslationStrategy;
-    sourceLocale: string;
-    targetLocales: readonly string[];
-    chunking: unknown;
-  }) => Effect.Effect<void, unknown> = runTranslation as unknown as typeof translationRunner,
+  translationRunner: (opts: TranslationRunConfig) => Effect.Effect<void, unknown> = runTranslation,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
   errorLogger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.error(msg),
 ): Effect.Effect<void, unknown> {

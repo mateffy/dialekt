@@ -9,9 +9,11 @@ import { missingCommand } from "./commands/missing.js";
 import { unusedCommand } from "./commands/unused.js";
 import { languagesCommand } from "./commands/languages.js";
 import { benchmarkCommand } from "./commands/benchmark.js";
+import { initCommand } from "./commands/init.js";
 
 const rootCommand = Command.make("dialekt").pipe(
   Command.withSubcommands([
+    initCommand,
     translateCommand,
     validateCommand,
     addCommand,

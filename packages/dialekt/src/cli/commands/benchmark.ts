@@ -119,9 +119,10 @@ export function runBenchmarkCommand(
       }
     }
 
+    const DEFAULT_SAMPLE_SIZE = 20;
     const sampled = allChunks.slice(
       0,
-      Option.getOrElse(flags.sampleSize, () => 20),
+      Option.getOrElse(flags.sampleSize, () => DEFAULT_SAMPLE_SIZE),
     );
 
     const summaries = yield* deps.benchmarkRunner({
@@ -163,7 +164,7 @@ export const benchmarkCommand = Command.make(
     runBenchmarkCommand(flags, {
       configLoader: loadConfig,
       modelResolver: resolveModel,
-      missingKeysComputer: computeMissingKeys as unknown as BenchmarkDeps["missingKeysComputer"],
+      missingKeysComputer: computeMissingKeys,
       benchmarkRunner: runBenchmark,
       logger: (msg: string) => Console.log(msg),
       errorLogger: (msg: string) => Console.error(msg),

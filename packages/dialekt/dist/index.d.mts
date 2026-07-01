@@ -10,11 +10,7 @@ interface ResourceRef {
   readonly key: string;
   readonly label: string;
 }
-declare const AdapterReadError_base: new <A extends Record<string, any> = {}>(
-  args: import("effect/Types").VoidIfEmpty<{
-    readonly [P in keyof A as P extends "_tag" ? never : P]: A[P];
-  }>,
-) => import("effect/Cause").YieldableError & {
+declare const AdapterReadError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
   readonly _tag: "AdapterReadError";
 } & Readonly<A>;
 declare class AdapterReadError extends AdapterReadError_base<{
@@ -23,11 +19,7 @@ declare class AdapterReadError extends AdapterReadError_base<{
   readonly resource: string;
   readonly cause: unknown;
 }> {}
-declare const AdapterWriteError_base: new <A extends Record<string, any> = {}>(
-  args: import("effect/Types").VoidIfEmpty<{
-    readonly [P in keyof A as P extends "_tag" ? never : P]: A[P];
-  }>,
-) => import("effect/Cause").YieldableError & {
+declare const AdapterWriteError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
   readonly _tag: "AdapterWriteError";
 } & Readonly<A>;
 declare class AdapterWriteError extends AdapterWriteError_base<{
@@ -46,16 +38,9 @@ interface TranslationAdapter {
   /** List the resources available for a given locale (e.g. domain files present for "en"). */
   listResources(locale: string): Effect.Effect<readonly ResourceRef[], AdapterReadError>;
   /** Read one resource, flattened to dot-notation key → string value. Returns {} if the resource does not exist. */
-  readResource(
-    locale: string,
-    resource: ResourceRef,
-  ): Effect.Effect<Record<string, string>, AdapterReadError>;
+  readResource(locale: string, resource: ResourceRef): Effect.Effect<Record<string, string>, AdapterReadError>;
   /** Write a full flattened key→value map back to a resource, unflattening as needed. Creates the resource if absent and `create` capability allows it. */
-  writeResource(
-    locale: string,
-    resource: ResourceRef,
-    entries: Record<string, string>,
-  ): Effect.Effect<void, AdapterWriteError>;
+  writeResource(locale: string, resource: ResourceRef, entries: Record<string, string>): Effect.Effect<void, AdapterWriteError>;
   /**
    * Returns translation keys present in the resource but never referenced
    * anywhere in the project's source code. Only called by the CLI's `unused`
@@ -74,10 +59,7 @@ interface TranslationAdapter {
    * adapter's own heuristic needs — core never sees or validates those
    * options.
    */
-  findUnusedKeys?(
-    locale: string,
-    resource: ResourceRef,
-  ): Effect.Effect<readonly string[], AdapterReadError>;
+  findUnusedKeys?(locale: string, resource: ResourceRef): Effect.Effect<readonly string[], AdapterReadError>;
 }
 interface AdapterCapabilities {
   readonly canCreateResource: boolean;
@@ -113,27 +95,16 @@ interface DialektConfig {
 declare function defineConfig(config: DialektConfig): DialektConfig;
 //#endregion
 //#region src/keys/flatten.d.ts
-declare function flattenObject(
-  input: Readonly<Record<string, unknown>>,
-  prefix?: string,
-): Record<string, string>;
+declare function flattenObject(input: Readonly<Record<string, unknown>>, prefix?: string): Record<string, string>;
 declare function unflattenObject(input: Readonly<Record<string, string>>): Record<string, unknown>;
-declare function diffKeys(
-  source: Readonly<Record<string, string>>,
-  target: Readonly<Record<string, string>>,
-): string[];
+declare function diffKeys(source: Readonly<Record<string, string>>, target: Readonly<Record<string, string>>): string[];
 //#endregion
 //#region src/translation/chunking.d.ts
 interface ChunkingConfig$1 {
   readonly maxTokens: number;
   readonly charsPerToken: number;
 }
-declare function chunkKeys(
-  keys: readonly string[],
-  sourceMap: Readonly<Record<string, string>>,
-  targetMap: Readonly<Record<string, string>>,
-  config: ChunkingConfig$1,
-): string[][];
+declare function chunkKeys(keys: readonly string[], sourceMap: Readonly<Record<string, string>>, targetMap: Readonly<Record<string, string>>, config: ChunkingConfig$1): string[][];
 //#endregion
 //#region src/sdk/node-layer.d.ts
 /**
@@ -145,44 +116,21 @@ declare function chunkKeys(
 declare const NodePlatformLayer: Layer.Layer<NodeContext.NodeContext, never, never>;
 //#endregion
 //#region src/sdk/file-io.d.ts
-declare function readFileIfExists(
-  path: string,
-): Effect.Effect<
-  string | null,
-  import("@effect/platform/Error").PlatformError,
-  FileSystem.FileSystem
->;
-declare function writeFileEnsuringDir(
-  path: string,
-  content: string,
-): Effect.Effect<
-  void,
-  import("@effect/platform/Error").PlatformError,
-  FileSystem.FileSystem | Path.Path
->;
+declare function readFileIfExists(path: string): Effect.Effect<string | null, import("@effect/platform/Error").PlatformError, FileSystem.FileSystem>;
+declare function writeFileEnsuringDir(path: string, content: string): Effect.Effect<void, import("@effect/platform/Error").PlatformError, FileSystem.FileSystem | Path.Path>;
 //#endregion
 //#region src/sdk/php-array-reader.d.ts
-declare const PhpExecutionError_base: new <A extends Record<string, any> = {}>(
-  args: import("effect/Types").VoidIfEmpty<{
-    readonly [P in keyof A as P extends "_tag" ? never : P]: A[P];
-  }>,
-) => import("effect/Cause").YieldableError & {
+declare const PhpExecutionError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
   readonly _tag: "PhpExecutionError";
 } & Readonly<A>;
 declare class PhpExecutionError extends PhpExecutionError_base<{
   readonly path: string;
   readonly cause: unknown;
 }> {}
-declare function readPhpArrayAsJson(
-  absolutePath: string,
-): Effect.Effect<Record<string, unknown>, PhpExecutionError, CommandExecutor>;
+declare function readPhpArrayAsJson(absolutePath: string): Effect.Effect<Record<string, unknown>, PhpExecutionError, CommandExecutor>;
 //#endregion
 //#region src/translation/model-registry.d.ts
-declare const UnknownProviderError_base: new <A extends Record<string, any> = {}>(
-  args: import("effect/Types").VoidIfEmpty<{
-    readonly [P in keyof A as P extends "_tag" ? never : P]: A[P];
-  }>,
-) => import("effect/Cause").YieldableError & {
+declare const UnknownProviderError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
   readonly _tag: "UnknownProviderError";
 } & Readonly<A>;
 declare class UnknownProviderError extends UnknownProviderError_base<{
@@ -195,9 +143,7 @@ interface ModelConfig$1 {
 /**
  * The one file in the entire codebase allowed to import AI SDK provider packages.
  */
-declare function resolveModel(
-  config: ModelConfig$1,
-): Effect.Effect<LanguageModel, UnknownProviderError>;
+declare function resolveModel(config: ModelConfig$1): Effect.Effect<LanguageModel, UnknownProviderError>;
 //#endregion
 //#region src/translation/types.d.ts
 interface TranslationContext {
@@ -207,11 +153,7 @@ interface TranslationContext {
   readonly targetMap: Record<string, string>;
   readonly keys: readonly string[];
 }
-declare const TranslationFailedError_base: new <A extends Record<string, any> = {}>(
-  args: import("effect/Types").VoidIfEmpty<{
-    readonly [P in keyof A as P extends "_tag" ? never : P]: A[P];
-  }>,
-) => import("effect/Cause").YieldableError & {
+declare const TranslationFailedError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
   readonly _tag: "TranslationFailedError";
 } & Readonly<A>;
 declare class TranslationFailedError extends TranslationFailedError_base<{
@@ -220,9 +162,7 @@ declare class TranslationFailedError extends TranslationFailedError_base<{
 }> {}
 interface TranslationStrategy {
   readonly name: "one-shot" | "tool-loop-agent";
-  translateChunk(
-    ctx: TranslationContext,
-  ): Effect.Effect<Record<string, string>, TranslationFailedError>;
+  translateChunk(ctx: TranslationContext): Effect.Effect<Record<string, string>, TranslationFailedError>;
 }
 //#endregion
 //#region src/translation/one-shot-strategy.d.ts
@@ -251,9 +191,7 @@ interface TranslationRunConfig {
   readonly targetLocales: readonly string[];
   readonly chunking: ChunkingConfig;
 }
-declare function runTranslation(
-  config: TranslationRunConfig,
-): Effect.Effect<undefined, AdapterReadError | AdapterWriteError | TranslationFailedError, never>;
+declare function runTranslation(config: TranslationRunConfig): Effect.Effect<undefined, TranslationFailedError | AdapterReadError | AdapterWriteError, never>;
 //#endregion
 //#region src/translation/prompt.d.ts
 declare function buildSystemPrompt(from: string, to: string): string;
@@ -266,18 +204,10 @@ interface MissingKeyEntry$1 {
   readonly resource: ResourceRef;
   readonly missing: readonly string[];
 }
-declare function computeMissingKeys(
-  adapter: TranslationAdapter,
-  sourceLocale: string,
-  targetLocales: readonly string[],
-): Effect.Effect<readonly MissingKeyEntry$1[], AdapterReadError>;
+declare function computeMissingKeys(adapter: TranslationAdapter, sourceLocale: string, targetLocales: readonly string[]): Effect.Effect<readonly MissingKeyEntry$1[], AdapterReadError>;
 //#endregion
 //#region src/config/load-config.d.ts
-declare const ConfigLoadError_base: new <A extends Record<string, any> = {}>(
-  args: import("effect/Types").VoidIfEmpty<{
-    readonly [P in keyof A as P extends "_tag" ? never : P]: A[P];
-  }>,
-) => import("effect/Cause").YieldableError & {
+declare const ConfigLoadError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
   readonly _tag: "ConfigLoadError";
 } & Readonly<A>;
 declare class ConfigLoadError extends ConfigLoadError_base<{
@@ -328,10 +258,7 @@ interface Glyphs {
   warn: string;
 }
 declare function glyphs(): Glyphs;
-declare function drawTable(
-  headers: readonly string[],
-  rows: readonly (readonly string[])[],
-): string;
+declare function drawTable(headers: readonly string[], rows: readonly (readonly string[])[]): string;
 declare function banner(title: string): string;
 declare function sectionHeader(label: string): string;
 declare function success(text: string): string;
@@ -347,10 +274,7 @@ interface MissingKeyEntry {
   readonly resource: string;
   readonly key: string;
 }
-declare function formatMissingKeys(
-  entries: readonly MissingKeyEntry[],
-  format: OutputFormat,
-): string;
+declare function formatMissingKeys(entries: readonly MissingKeyEntry[], format: OutputFormat): string;
 interface UnusedKeyEntry {
   readonly adapter: string;
   readonly locale: string;
@@ -402,65 +326,4 @@ interface BenchmarkEntry {
 declare function formatBenchmark(entries: readonly BenchmarkEntry[], format: OutputFormat): string;
 declare function formatError(message: string, format: OutputFormat): string;
 //#endregion
-export {
-  type AdapterCapabilities,
-  AdapterReadError,
-  AdapterWriteError,
-  type AddResult,
-  type BenchmarkEntry,
-  type ChunkingConfig,
-  ConfigLoadError,
-  type DialektConfig,
-  type LanguageEntry,
-  type MissingKeyEntry,
-  type ModelConfig,
-  NodePlatformLayer,
-  type OutputFormat,
-  PhpExecutionError,
-  type ResourceRef,
-  type RetryConfig,
-  type TranslateResult,
-  type TranslationAdapter,
-  type TranslationContext,
-  TranslationFailedError,
-  type TranslationStrategy,
-  UnknownProviderError,
-  type UnusedKeyEntry,
-  type ValidateEntry,
-  type ValidateResult,
-  banner,
-  buildSystemPrompt,
-  buildUserPrompt,
-  chunkKeys,
-  color,
-  computeMissingKeys,
-  createOneShotStrategy,
-  createToolLoopStrategy,
-  defineConfig,
-  detectFormat,
-  diffKeys,
-  drawTable,
-  failure,
-  flattenObject,
-  formatAdd,
-  formatBenchmark,
-  formatError,
-  formatLanguages,
-  formatMissingKeys,
-  formatTranslate,
-  formatUnusedKeys,
-  formatValidate,
-  glyphs,
-  info,
-  keyValue,
-  loadConfig,
-  readFileIfExists,
-  readPhpArrayAsJson,
-  resolveModel,
-  runTranslation,
-  sectionHeader,
-  success,
-  unflattenObject,
-  warning,
-  writeFileEnsuringDir,
-};
+export { type AdapterCapabilities, AdapterReadError, AdapterWriteError, type AddResult, type BenchmarkEntry, type ChunkingConfig, ConfigLoadError, type DialektConfig, type LanguageEntry, type MissingKeyEntry, type ModelConfig, NodePlatformLayer, type OutputFormat, PhpExecutionError, type ResourceRef, type RetryConfig, type TranslateResult, type TranslationAdapter, type TranslationContext, TranslationFailedError, type TranslationStrategy, UnknownProviderError, type UnusedKeyEntry, type ValidateEntry, type ValidateResult, banner, buildSystemPrompt, buildUserPrompt, chunkKeys, color, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, detectFormat, diffKeys, drawTable, failure, flattenObject, formatAdd, formatBenchmark, formatError, formatLanguages, formatMissingKeys, formatTranslate, formatUnusedKeys, formatValidate, glyphs, info, keyValue, loadConfig, readFileIfExists, readPhpArrayAsJson, resolveModel, runTranslation, sectionHeader, success, unflattenObject, warning, writeFileEnsuringDir };

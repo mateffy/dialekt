@@ -14,6 +14,33 @@ export interface UnusedFlags {
   readonly format?: Option.Option<string>;
 }
 
+function resolveFormat(flag: Option.Option<string> | undefined): OutputFormat {
+  return detectFormat(
+    flag !== undefined ? (Option.getOrUndefined(flag) as OutputFormat | undefined) : undefined,
+  );
+}
+
+function collectUnusedFromAdapter(
+  a: TranslationAdapter,
+  sourceLocale: string,
+  entries: Array<{ adapter: string; locale: string; resource: string; key: string }>,
+): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const resources = yield* a.listResources(sourceLocale);
+    for (const resource of resources) {
+      const unused = yield* a.findUnusedKeys!(sourceLocale, resource);
+      for (const key of unused) {
+        entries.push({
+          adapter: a.name,
+          locale: sourceLocale,
+          resource: resource.label,
+          key,
+        });
+      }
+    }
+  });
+}
+
 export function runUnused(
   flags: UnusedFlags,
   configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
@@ -42,40 +69,17 @@ export function runUnused(
         yield* errorLogger(
           formatError(
             `Adapter '${a.name}' does not support unused-key detection.`,
-            detectFormat(
-              flags.format !== undefined
-                ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
-                : undefined,
-            ),
+            resolveFormat(flags.format),
           ),
         );
         continue;
       }
 
-      const locales = yield* a.listLocales();
       const sourceLocale = effective.sourceLocale;
-      const resources = yield* a.listResources(sourceLocale);
-
-      for (const resource of resources) {
-        const unused = yield* a.findUnusedKeys!(sourceLocale, resource);
-        for (const key of unused) {
-          allEntries.push({
-            adapter: a.name,
-            locale: sourceLocale,
-            resource: resource.label,
-            key,
-          });
-        }
-      }
+      yield* collectUnusedFromAdapter(a, sourceLocale, allEntries);
     }
 
-    const format = detectFormat(
-      flags.format !== undefined
-        ? (Option.getOrUndefined(flags.format) as OutputFormat | undefined)
-        : undefined,
-    );
-
-    yield* logger(formatUnusedKeys(allEntries, format));
+    yield* logger(formatUnusedKeys(allEntries, resolveFormat(flags.format)));
   }).pipe(Effect.mapError((e) => e as never)) as Effect.Effect<void, never, never>;
 }
 

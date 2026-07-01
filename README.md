@@ -1,10 +1,10 @@
 <div>
-  <img src="./resources/icon.svg" align="left" width="175">
+  <img src="./resources/icon.svg" align="left" width="200">
 </div>
 
 # `dialekt`
 
-**Dialekt** [*diˈalɛkt, German for "dialect"*] is a CLI toolkit that automates application string translation using large language models, regardless of your tech stack. It reads your source locale files, detects missing keys in target locales, calls an LLM to produce translations, and writes the results back. 
+**Dialekt** [*diˈalɛkt, German for "dialect"*] is a CLI toolkit that automates application string translation using large language models, regardless of your tech stack. It detects missing keys in target locales, calls an LLM to produce translations, and writes the results using framework-specific adapters.
 
 <br>
 
