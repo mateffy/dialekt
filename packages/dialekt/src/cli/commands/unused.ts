@@ -5,7 +5,7 @@ import { resolveEffectiveConfig } from "../config-resolution.js";
 import { detectFormat, type OutputFormat } from "../format.js";
 import { formatUnusedKeys, formatError } from "../formatters.js";
 import type { DialektConfig } from "../../config/types.js";
-import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
+import type { TranslationAdapter, ResourceRef, AdapterReadError } from "../../adapter/types.js";
 
 export interface UnusedFlags {
   readonly config: string;
@@ -24,7 +24,7 @@ function collectUnusedFromAdapter(
   a: TranslationAdapter,
   sourceLocale: string,
   entries: Array<{ adapter: string; locale: string; resource: string; key: string }>,
-): Effect.Effect<void, never> {
+): Effect.Effect<void, AdapterReadError> {
   return Effect.gen(function* () {
     const resources = yield* a.listResources(sourceLocale);
     for (const resource of resources) {
@@ -76,7 +76,9 @@ export function runUnused(
       }
 
       const sourceLocale = effective.sourceLocale;
-      yield* collectUnusedFromAdapter(a, sourceLocale, allEntries);
+      yield* collectUnusedFromAdapter(a, sourceLocale, allEntries).pipe(
+        Effect.mapError((cause) => cause as never),
+      );
     }
 
     yield* logger(formatUnusedKeys(allEntries, resolveFormat(flags.format)));

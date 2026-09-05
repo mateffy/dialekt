@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Effect, Either } from "effect";
-import { runTranslation } from "./orchestrator.js";
+import { runTranslation, type TranslationProgressEvent } from "./orchestrator.js";
 import type {
   TranslationAdapter,
   ResourceRef,
@@ -261,5 +261,159 @@ describe("runTranslation", () => {
     const locales = writes.map((w) => w.locale);
     expect(locales).toContain("de");
     expect(locales).toContain("fr");
+  });
+
+  it("fires onProgress events for each translation phase", async () => {
+    const events: TranslationProgressEvent[] = [];
+
+    const adapter: TranslationAdapter = {
+      name: "test",
+      capabilities: { canCreateResource: true, unusedKeyDetection: false },
+      listLocales: () => Effect.succeed(["en", "de"]),
+      listResources: () => Effect.succeed([{ key: "messages", label: "messages" }]),
+      readResource: (locale: string) =>
+        Effect.succeed(locale === "en" ? { hello: "Hello", bye: "Bye" } : { hello: "Hallo" }),
+      writeResource: () => Effect.void,
+    };
+
+    const strategy = {
+      name: "one-shot" as const,
+      translateChunk: (ctx: { keys: readonly string[] }) =>
+        Effect.succeed(Object.fromEntries(ctx.keys.map((k: string) => [k, k]))),
+    };
+
+    const program = runTranslation(
+      {
+        adapters: [adapter],
+        strategy,
+        sourceLocale: "en",
+        targetLocales: ["de"],
+        chunking: { maxTokens: 3000, charsPerToken: 3.0, concurrency: 3 },
+      },
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    await Effect.runPromise(program);
+
+    // Should have at least: locale-start, locale-scanned, locale-start, chunk-complete, locale-done
+    const types = events.map((e) => e.type);
+    expect(types).toContain("locale-start");
+    expect(types).toContain("locale-scanned");
+    expect(types).toContain("chunk-complete");
+    expect(types).toContain("locale-done");
+
+    // Verify scanned data
+    const scanned = events.find((e) => e.type === "locale-scanned")!;
+    expect(scanned.locale).toBe("de");
+    expect(scanned.missingKeys).toBe(1); // bye is missing in de
+    expect(scanned.chunksTotal).toBeGreaterThan(0);
+  });
+
+  it("fires chunk-complete for each translated chunk", async () => {
+    const events: TranslationProgressEvent[] = [];
+    // 10 missing keys, chunking such that each key is its own chunk.
+    const keys = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`k${i}`, `val${i}`]));
+
+    const adapter: TranslationAdapter = {
+      name: "test",
+      capabilities: { canCreateResource: true, unusedKeyDetection: false },
+      listLocales: () => Effect.succeed(["en", "de"]),
+      listResources: () => Effect.succeed([{ key: "m", label: "m" }]),
+      readResource: (locale: string) => Effect.succeed(locale === "en" ? keys : {}),
+      writeResource: () => Effect.void,
+    };
+
+    const strategy = {
+      name: "one-shot" as const,
+      translateChunk: (ctx: { keys: readonly string[] }) =>
+        Effect.succeed(Object.fromEntries(ctx.keys.map((k: string) => [k, k]))),
+    };
+
+    const program = runTranslation(
+      {
+        adapters: [adapter],
+        strategy,
+        sourceLocale: "en",
+        targetLocales: ["de"],
+        chunking: { maxTokens: 10, charsPerToken: 1, concurrency: 3 },
+      },
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    await Effect.runPromise(program);
+
+    const completes = events.filter((e) => e.type === "chunk-complete");
+    expect(completes.length).toBeGreaterThan(0);
+  });
+
+  it("fires chunk-fail for each failing chunk", async () => {
+    const events: TranslationProgressEvent[] = [];
+    const adapter: TranslationAdapter = {
+      name: "test",
+      capabilities: { canCreateResource: true, unusedKeyDetection: false },
+      listLocales: () => Effect.succeed(["en", "de"]),
+      listResources: () => Effect.succeed([{ key: "m", label: "m" }]),
+      readResource: (locale: string) => Effect.succeed(locale === "en" ? { a: "A", b: "B" } : {}),
+      writeResource: () => Effect.void,
+    };
+
+    const strategy = {
+      name: "one-shot" as const,
+      translateChunk: () =>
+        Effect.fail(new TranslationFailedError({ keys: ["a"], cause: "llm-error" })),
+    };
+
+    const program = runTranslation(
+      {
+        adapters: [adapter],
+        strategy,
+        sourceLocale: "en",
+        targetLocales: ["de"],
+        chunking: { maxTokens: 3000, charsPerToken: 3.0, concurrency: 1 },
+      },
+      (event) => {
+        events.push(event);
+      },
+    );
+
+    await Effect.runPromise(Effect.either(program));
+
+    const fails = events.filter((e) => e.type === "chunk-fail");
+    expect(fails.length).toBeGreaterThan(0);
+  });
+
+  it("translateChunk is called when missing keys exist", async () => {
+    let translateCalls = 0;
+    const adapter: TranslationAdapter = {
+      name: "test",
+      capabilities: { canCreateResource: true, unusedKeyDetection: false },
+      listLocales: () => Effect.succeed(["en", "de"]),
+      listResources: () => Effect.succeed([{ key: "m", label: "m" }]),
+      readResource: (locale: string) => Effect.succeed(locale === "en" ? { a: "A" } : {}),
+      writeResource: () => Effect.void,
+    };
+
+    const strategy = {
+      name: "one-shot" as const,
+      translateChunk: () => {
+        translateCalls++;
+        return Effect.succeed(Object.fromEntries([["a", "translated"]]));
+      },
+    };
+
+    const program = runTranslation({
+      adapters: [adapter],
+      strategy,
+      sourceLocale: "en",
+      targetLocales: ["de"],
+      chunking: { maxTokens: 3000, charsPerToken: 3.0, concurrency: 1 },
+    });
+
+    await Effect.runPromise(program);
+    expect(translateCalls).toBeGreaterThan(0);
   });
 });

@@ -9,8 +9,17 @@
     "check": "gesetz check"
   },
   "devDependencies": {
+    "@dialekt/adapter-android": "workspace:*",
+    "@dialekt/adapter-arb": "workspace:*",
+    "@dialekt/adapter-csv": "workspace:*",
+    "@dialekt/adapter-ios": "workspace:*",
+    "@dialekt/adapter-json": "workspace:*",
     "@dialekt/adapter-laravel": "workspace:*",
     "@dialekt/adapter-paraglide": "workspace:*",
+    "@dialekt/adapter-po": "workspace:*",
+    "@dialekt/adapter-properties": "workspace:*",
+    "@dialekt/adapter-xliff": "workspace:*",
+    "@dialekt/adapter-yaml": "workspace:*",
     "@effect/vitest": "^0.29.0",
     "@gesetz/cli": "^1.3.3",
     "@gesetz/effect-ts": "^1.3.3",

@@ -3,7 +3,9 @@ import { Effect } from "effect";
 import type { ResourceRef, AdapterReadError } from "dialekt";
 import { AdapterReadError as AdapterReadErrorClass } from "dialekt";
 
-export function listLaravelLocales(langDir: string): Effect.Effect<string[], AdapterReadError> {
+export function listLaravelLocales(
+  langDir: string,
+): Effect.Effect<string[], AdapterReadError, FileSystem.FileSystem | Path.Path> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -40,7 +42,7 @@ export function listLaravelLocales(langDir: string): Effect.Effect<string[], Ada
 export function listLaravelResources(
   langDir: string,
   locale: string,
-): Effect.Effect<ResourceRef[], AdapterReadError> {
+): Effect.Effect<ResourceRef[], AdapterReadError, FileSystem.FileSystem | Path.Path> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;

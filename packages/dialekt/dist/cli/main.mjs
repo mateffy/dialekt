@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-C26a4MID.mjs";
+import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-DHNhjSLE.mjs";
 import { Console, Effect, Option } from "effect";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command, FileSystem } from "@effect/platform";
@@ -15,7 +15,268 @@ function resolveEffectiveConfig(flags, loaded) {
 	};
 }
 //#endregion
+//#region src/cli/progress.ts
+const SPINNER = [
+	"⠋",
+	"⠙",
+	"⠹",
+	"⠸",
+	"⠼",
+	"⠴",
+	"⠦",
+	"⠧",
+	"⠇",
+	"⠏"
+];
+const DIM = "\x1B[2m";
+const GREEN = "\x1B[32m";
+const CYAN = "\x1B[36m";
+const RED = "\x1B[31m";
+const RESET = "\x1B[0m";
+var ProgressDisplay = class {
+	rows = /* @__PURE__ */ new Map();
+	order;
+	timer = null;
+	frame = 0;
+	active = false;
+	drawn = 0;
+	fd;
+	constructor(entries) {
+		this.order = entries.map((e) => e.locale);
+		for (const e of entries) this.rows.set(e.locale, {
+			locale: e.locale,
+			resources: e.resources,
+			keys: 0,
+			chunks: 0,
+			completed: 0,
+			failed: 0,
+			status: "pending",
+			startTime: 0
+		});
+		this.fd = process.stderr;
+	}
+	start() {
+		if (this.active) return;
+		this.active = true;
+		this.draw();
+		if (this.timer) clearInterval(this.timer);
+		this.timer = setInterval(() => {
+			this.frame = (this.frame + 1) % SPINNER.length;
+			this.draw();
+		}, 100);
+	}
+	localeStarted(locale) {
+		const r = this.rows.get(locale);
+		if (r && r.status === "pending") {
+			r.status = "translating";
+			r.startTime = Date.now();
+		}
+	}
+	localeScanned(locale, keys, chunks) {
+		const r = this.rows.get(locale);
+		if (r) {
+			r.keys = keys;
+			r.chunks = chunks;
+			if (chunks === 0 && keys === 0) {
+				r.status = "no-missing";
+				r.startTime = Date.now();
+			}
+		}
+	}
+	chunkComplete(locale) {
+		const r = this.rows.get(locale);
+		if (r && r.status === "translating") r.completed++;
+	}
+	chunkFailed(locale) {
+		const r = this.rows.get(locale);
+		if (r) r.failed++;
+	}
+	localeDone(locale) {
+		const r = this.rows.get(locale);
+		if (r && r.status !== "no-missing") r.status = "done";
+	}
+	localeError(locale) {
+		const r = this.rows.get(locale);
+		if (r && r.status !== "done") r.status = "error";
+	}
+	/** Called before writing chunk output to stderr — pauses the timer. */
+	beforeChunkOutput() {
+		if (this.timer) {
+			clearInterval(this.timer);
+			this.timer = null;
+		}
+		this.fd.write("\r\x1B[A\x1B[K");
+	}
+	/** Called after chunk output — restarts the timer and redraws. */
+	afterChunkOutput() {
+		this.timer = setInterval(() => {
+			this.frame = (this.frame + 1) % SPINNER.length;
+			this.draw();
+		}, 100);
+		this.draw();
+	}
+	finish() {
+		if (this.timer) {
+			clearInterval(this.timer);
+			this.timer = null;
+		}
+		this.active = false;
+		this.draw();
+		this.fd.write("\n");
+	}
+	draw() {
+		if (this.drawn > 0) for (let i = 0; i < this.drawn; i++) this.fd.write("\x1B[1A\x1B[K");
+		this.drawn = 0;
+		for (const locale of this.order) {
+			const row = this.rows.get(locale);
+			const s = row.status === "translating" ? SPINNER[this.frame % SPINNER.length] + " " : row.status === "pending" ? "\x1B[2m··\x1B[0m " : "  ";
+			const keysStr = row.keys > 0 ? String(row.keys) : "\x1B[2m···\x1B[0m";
+			const chunksStr = row.chunks > 0 ? String(row.chunks) : "\x1B[2m···\x1B[0m";
+			const progressStr = row.status === "no-missing" ? "\x1B[32m—\x1B[0m" : row.chunks === 0 && row.status === "done" ? "\x1B[32m—\x1B[0m" : row.status === "pending" ? "\x1B[2m···\x1B[0m" : `${row.completed + row.failed}/${row.chunks}`;
+			let statusStr;
+			switch (row.status) {
+				case "pending":
+					statusStr = "\x1B[2mpending\x1B[0m";
+					break;
+				case "translating":
+					statusStr = "translating";
+					break;
+				case "done":
+					statusStr = `${GREEN}✓${RESET} done ${DIM}${row.startTime > 0 ? ((Date.now() - row.startTime) / 1e3).toFixed(1) : "0.0"}s${RESET}`;
+					break;
+				case "no-missing":
+					statusStr = `${GREEN}✓${RESET} ${DIM}complete${RESET}`;
+					break;
+				case "error":
+					statusStr = row.failed > 0 ? `${RED}✗${RESET} ${row.failed} failed` : `${RED}✗${RESET} error`;
+					break;
+			}
+			this.fd.write(`\r${s}${pad(row.locale, 9)} ${pad(keysStr, 9)} ${pad(chunksStr, 8)} ${pad(progressStr, 9)} ${statusStr}\n`);
+			this.drawn++;
+		}
+	}
+};
+function pad(s, n) {
+	const plain = s.replace(/\x1b\[[0-9;]*m/g, "");
+	const padLen = Math.max(0, n - plain.length);
+	return s + " ".repeat(padLen);
+}
+/**
+* A single-line animated status bar that shows what each concurrent thread
+* is currently working on. Chunk output is rendered above it via the
+* beforeOutput/afterOutput dance.
+*/
+var StatusBar = class {
+	timer = null;
+	frame = 0;
+	slots = {};
+	active = false;
+	fd = process.stderr;
+	/** Guard to prevent timer redraws during chunk card output. */
+	writing = false;
+	/** Update a slot with the locale+resource the thread is working on. */
+	setSlot(locale, resource, progress) {
+		this.slots[locale] = {
+			resource,
+			chunk: progress
+		};
+	}
+	/** Clear a slot when a thread finishes its chunk. */
+	clearSlot(locale) {
+		delete this.slots[locale];
+	}
+	start() {
+		if (this.active) return;
+		this.active = true;
+		this.draw();
+		if (this.timer) clearInterval(this.timer);
+		this.timer = setInterval(() => {
+			this.frame = (this.frame + 1) % SPINNER.length;
+			this.draw();
+		}, 100);
+	}
+	/** Redraws the bottom line in place. Skips if a chunk card is being written. */
+	draw() {
+		if (this.writing) return;
+		this.fd.write("\r\x1B[K");
+		const entries = Object.entries(this.slots);
+		if (entries.length === 0) this.fd.write(`${DIM}  waiting...${RESET}`);
+		else {
+			const s = SPINNER[this.frame % SPINNER.length];
+			const parts = entries.map(([loc, { resource, chunk }]) => `${CYAN}${loc}${RESET}/${DIM}${resource ?? "?"}${RESET} ${chunk ?? "?"}`);
+			this.fd.write(`${s}  ${parts.join("  ")}`);
+		}
+	}
+	/**
+	* Move cursor above status line, stop the animation timer,
+	* and lock out concurrent chunk output.
+	*/
+	beforeOutput() {
+		this.writing = true;
+		if (this.timer) {
+			clearInterval(this.timer);
+			this.timer = null;
+		}
+		this.fd.write("\r\x1B[A\x1B[K");
+	}
+	/** Redraw status line and restart animation. */
+	afterOutput() {
+		setImmediate(() => {
+			this.fd.write("\r\x1B[K");
+			this.draw();
+			this.writing = false;
+			if (!this.timer) this.timer = setInterval(() => {
+				this.frame = (this.frame + 1) % SPINNER.length;
+				this.draw();
+			}, 100);
+		});
+	}
+	finish() {
+		if (this.timer) {
+			clearInterval(this.timer);
+			this.timer = null;
+		}
+		this.active = false;
+		this.fd.write("\r\x1B[K");
+	}
+};
+//#endregion
 //#region src/cli/commands/translate.ts
+const D = "\x1B[2m";
+const G = "\x1B[32m";
+const C = "\x1B[36m";
+const Y = "\x1B[33m";
+const B = "\x1B[1m";
+const W = "\x1B[0m";
+function shouldShowProgress(flags) {
+	if (!process.stdout.isTTY) return false;
+	if (!flags.quiet) return false;
+	if ((flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0) === "json") return false;
+	return true;
+}
+function emitChunk(trace, chunkNum, total, bar) {
+	const { sourceLocale, targetLocale, resource, keys, sourceTexts, output } = trace;
+	const counter = `${G}${chunkNum}/${total}${W}`;
+	const locPair = `${Y}${sourceLocale}${W} ${D}→${W} ${C}${targetLocale}${W}`;
+	const res = resource ? `${D}${resource}${W}  ` : "";
+	const lines = [];
+	lines.push(`\n${D}┌${W} ${res}${B}${keys.length} keys${W}  ${locPair}  ${D}[${W}${counter}${D}]${W}`);
+	lines.push(`${D}│${W}`);
+	for (const key of keys) {
+		const src = sourceTexts[key] ?? "";
+		const tgt = output[key] ?? "\x1B[2m(missing)\x1B[0m";
+		lines.push(`${D}│${W} ${C}${key}${W}`);
+		lines.push(`${D}│${W}  ${D}de${W}  ${src.slice(0, 140)}`);
+		lines.push(`${D}│${W}  ${G}${targetLocale}${W}  ${tgt.slice(0, 140)}`);
+		lines.push(`${D}│${W}`);
+	}
+	lines.push(`${D}└${W}`);
+	bar.beforeOutput();
+	process.stderr.write(lines.join("\n") + "\n\n");
+	bar.afterOutput();
+}
+const DEEPSEEK_INPUT_PER_1M = .4;
+const DEEPSEEK_OUTPUT_PER_1M = .6;
 function runTranslate(flags, configLoader = loadConfig, modelResolver = resolveModel, translationRunner = runTranslation, logger = (msg) => Console.log(msg)) {
 	return Effect.gen(function* () {
 		const loaded = yield* configLoader(flags.config);
@@ -26,28 +287,155 @@ function runTranslate(flags, configLoader = loadConfig, modelResolver = resolveM
 			strategy: Option.getOrUndefined(flags.strategy) === "one-shot" || Option.getOrUndefined(flags.strategy) === "tool-loop-agent" ? Option.getOrUndefined(flags.strategy) : void 0
 		}, loaded);
 		const model = yield* modelResolver(flags.fast ? effective.fastModel : effective.model);
-		const translationStrategy = effective.strategy === "tool-loop-agent" ? createToolLoopStrategy({
+		const showProgress = shouldShowProgress(flags);
+		const showStatus = !flags.quiet && process.stdout.isTTY;
+		let bar = null;
+		let display = null;
+		if (showStatus) {
+			bar = new StatusBar();
+			bar.start();
+		} else if (showProgress) {
+			const rows = [];
+			for (const a of effective.adapters) {
+				const allLocales = yield* a.listLocales();
+				const sourceLocale = effective.sourceLocale;
+				const targets = effective.targetLocales && effective.targetLocales.length > 0 ? effective.targetLocales.filter((l) => l !== sourceLocale) : allLocales.filter((l) => l !== sourceLocale);
+				for (const loc of targets) {
+					const resources = yield* a.listResources(sourceLocale);
+					rows.push({
+						locale: loc,
+						resources: resources.length
+					});
+				}
+			}
+			if (rows.length > 0) {
+				display = new ProgressDisplay(rows);
+				display.start();
+			}
+		}
+		const chunkIdx = /* @__PURE__ */ new Map();
+		const chunkTot = /* @__PURE__ */ new Map();
+		const perLocaleTotal = /* @__PURE__ */ new Map();
+		const perLocaleDone = /* @__PURE__ */ new Map();
+		const cstats = {
+			totalPromptTokens: 0,
+			totalCompletionTokens: 0,
+			totalDurationMs: 0,
+			chunkCount: 0,
+			minDurationMs: Infinity,
+			maxDurationMs: 0
+		};
+		let translatedKeys = 0;
+		const onTrace = !flags.quiet ? (trace) => {
+			const locale = trace.targetLocale;
+			perLocaleDone.set(locale, (perLocaleDone.get(locale) ?? 0) + trace.keys.length);
+			const idx = (chunkIdx.get(locale) ?? 0) + 1;
+			chunkIdx.set(locale, idx);
+			const tot = chunkTot.get(locale) ?? 0;
+			cstats.totalPromptTokens += trace.promptTokens;
+			cstats.totalCompletionTokens += trace.completionTokens;
+			cstats.totalDurationMs += trace.durationMs;
+			cstats.chunkCount++;
+			cstats.minDurationMs = Math.min(cstats.minDurationMs, trace.durationMs);
+			cstats.maxDurationMs = Math.max(cstats.maxDurationMs, trace.durationMs);
+			if (bar) emitChunk(trace, idx, tot, bar);
+			else {
+				const { sourceLocale: sl, targetLocale: tl, resource, keys, sourceTexts, output } = trace;
+				const out = process.stderr;
+				out.write(`\n${D}┌${W} ${resource ? D + resource + "\x1B[0m  " : ""}${B}${keys.length} keys${W}  ${Y}${sl}${W} ${D}→${W} ${C}${tl}${W}\n${D}│${W}\n`);
+				for (const key of keys) {
+					if (!output[key] && !sourceTexts[key]) continue;
+					out.write(`${D}│${W} ${C}${key}${W}\n`);
+					out.write(`${D}│${W}  ${D}de${W}  ${(sourceTexts[key] ?? "").slice(0, 140)}\n`);
+					out.write(`${D}│${W}  ${G}${tl}${W}  ${(output[key] ?? "\x1B[2m(missing)\x1B[0m").slice(0, 140)}\n`);
+					out.write(`${D}│${W}\n`);
+				}
+				out.write(`${D}└${W}\n`);
+			}
+		} : void 0;
+		const strategy = effective.strategy === "tool-loop-agent" ? createToolLoopStrategy({
 			model,
-			retry: effective.retry
+			retry: effective.retry,
+			...onTrace ? { onTrace } : {}
 		}) : createOneShotStrategy({
 			model,
-			retry: effective.retry
+			retry: effective.retry,
+			...onTrace ? { onTrace } : {}
 		});
 		yield* translationRunner({
 			adapters: effective.adapters,
-			strategy: translationStrategy,
+			strategy,
 			sourceLocale: effective.sourceLocale,
 			targetLocales: effective.targetLocales ?? [],
-			chunking: effective.chunking
+			chunking: effective.chunking,
+			resourceFilter: Option.getOrUndefined(flags.name)
+		}, (event) => {
+			switch (event.type) {
+				case "locale-start":
+					display?.localeStarted(event.locale);
+					break;
+				case "locale-scanned":
+					display?.localeScanned(event.locale, event.missingKeys ?? 0, event.chunksTotal ?? 0);
+					translatedKeys += event.missingKeys ?? 0;
+					chunkTot.set(event.locale, event.chunksTotal ?? 0);
+					perLocaleTotal.set(event.locale, (perLocaleTotal.get(event.locale) ?? 0) + (event.missingKeys ?? 0));
+					break;
+				case "chunk-start":
+					if (bar && event.resource) bar.setSlot(event.locale, event.resource, "⏳");
+					break;
+				case "chunk-complete":
+					display?.chunkComplete(event.locale);
+					if (bar && event.resource) bar.clearSlot(event.locale);
+					break;
+				case "chunk-fail":
+					display?.chunkFailed(event.locale);
+					if (bar && event.resource) bar.clearSlot(event.locale);
+					break;
+				case "locale-done":
+					display?.localeDone(event.locale);
+					bar?.clearSlot(event.locale);
+					break;
+				case "locale-error":
+					display?.localeError(event.locale);
+					bar?.clearSlot(event.locale);
+					break;
+			}
 		});
+		if (bar) bar.finish();
+		if (display) display.finish();
 		const format = detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0);
+		const targetCount = effective.targetLocales && effective.targetLocales.length > 0 ? effective.targetLocales.filter((l) => l !== effective.sourceLocale).length : 0;
+		const msg = translatedKeys === 0 ? "All translations are already complete — nothing to translate." : "Translation complete.";
+		const perLocale = {};
+		let totalSource = 0;
+		for (const [loc, tot] of perLocaleTotal) {
+			totalSource += tot;
+			perLocale[loc] = {
+				translated: perLocaleDone.get(loc) ?? 0,
+				remaining: Math.max(0, tot - (perLocaleDone.get(loc) ?? 0))
+			};
+		}
+		const avgDuration = cstats.chunkCount > 0 ? cstats.totalDurationMs / cstats.chunkCount : 0;
+		const costUsd = cstats.totalPromptTokens / 1e6 * DEEPSEEK_INPUT_PER_1M + cstats.totalCompletionTokens / 1e6 * DEEPSEEK_OUTPUT_PER_1M;
+		const chunkStats = cstats.chunkCount > 0 ? {
+			chunkCount: cstats.chunkCount,
+			avgDurationMs: Math.round(avgDuration),
+			minDurationMs: cstats.minDurationMs === Infinity ? 0 : cstats.minDurationMs,
+			maxDurationMs: cstats.maxDurationMs,
+			totalPromptTokens: cstats.totalPromptTokens,
+			totalCompletionTokens: cstats.totalCompletionTokens,
+			estimatedCostUsd: Math.round(costUsd * 1e4) / 1e4
+		} : void 0;
 		yield* logger(formatTranslate({
 			success: true,
-			message: "Translation complete.",
+			message: msg,
 			stats: {
 				adaptersProcessed: effective.adapters.length,
-				localesTranslated: (effective.targetLocales ?? []).length,
-				keysTranslated: 0
+				localesTranslated: targetCount,
+				keysTranslated: translatedKeys,
+				...totalSource > 0 ? { totalSourceKeys: totalSource } : {},
+				...Object.keys(perLocale).length > 0 ? { perLocale } : {},
+				...chunkStats ? { chunkStats } : {}
 			}
 		}, format));
 	});
@@ -62,6 +450,7 @@ const translateCommand = Command$1.make("translate", {
 	skipNames: Options.boolean("skip-names"),
 	skipLanguages: Options.boolean("skip-languages"),
 	fast: Options.boolean("fast"),
+	quiet: Options.boolean("quiet"),
 	format: Options.optional(Options.text("format"))
 }, (flags) => runTranslate(flags));
 //#endregion
@@ -191,9 +580,8 @@ function runMissing(flags, configLoader = loadConfig, missingKeysComputer = comp
 		}, loaded);
 		const allEntries = [];
 		for (const a of effective.adapters) {
-			const locales = yield* a.listLocales();
 			const sourceLocale = effective.sourceLocale;
-			const entries = yield* missingKeysComputer(a, sourceLocale, locales.filter((l) => l !== sourceLocale));
+			const entries = yield* missingKeysComputer(a, sourceLocale, effective.targetLocales && effective.targetLocales.length > 0 ? effective.targetLocales.filter((l) => l !== sourceLocale) : (yield* a.listLocales()).filter((l) => l !== sourceLocale));
 			for (const entry of entries) for (const key of entry.missing) allEntries.push({
 				adapter: entry.adapter,
 				locale: entry.locale,
@@ -213,6 +601,23 @@ const missingCommand = Command$1.make("missing", {
 }, (flags) => runMissing(flags));
 //#endregion
 //#region src/cli/commands/unused.ts
+function resolveFormat(flag) {
+	return detectFormat(flag !== void 0 ? Option.getOrUndefined(flag) : void 0);
+}
+function collectUnusedFromAdapter(a, sourceLocale, entries) {
+	return Effect.gen(function* () {
+		const resources = yield* a.listResources(sourceLocale);
+		for (const resource of resources) {
+			const unused = yield* a.findUnusedKeys(sourceLocale, resource);
+			for (const key of unused) entries.push({
+				adapter: a.name,
+				locale: sourceLocale,
+				resource: resource.label,
+				key
+			});
+		}
+	});
+}
 function runUnused(flags, configLoader = loadConfig, logger = (msg) => Console.log(msg), errorLogger = (msg) => Console.error(msg)) {
 	return Effect.gen(function* () {
 		const loaded = yield* configLoader(flags.config);
@@ -223,23 +628,13 @@ function runUnused(flags, configLoader = loadConfig, logger = (msg) => Console.l
 		const allEntries = [];
 		for (const a of effective.adapters) {
 			if (!a.capabilities.unusedKeyDetection) {
-				yield* errorLogger(formatError(`Adapter '${a.name}' does not support unused-key detection.`, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
+				yield* errorLogger(formatError(`Adapter '${a.name}' does not support unused-key detection.`, resolveFormat(flags.format)));
 				continue;
 			}
-			yield* a.listLocales();
 			const sourceLocale = effective.sourceLocale;
-			const resources = yield* a.listResources(sourceLocale);
-			for (const resource of resources) {
-				const unused = yield* a.findUnusedKeys(sourceLocale, resource);
-				for (const key of unused) allEntries.push({
-					adapter: a.name,
-					locale: sourceLocale,
-					resource: resource.label,
-					key
-				});
-			}
+			yield* collectUnusedFromAdapter(a, sourceLocale, allEntries).pipe(Effect.mapError((cause) => cause));
 		}
-		yield* logger(formatUnusedKeys(allEntries, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
+		yield* logger(formatUnusedKeys(allEntries, resolveFormat(flags.format)));
 	}).pipe(Effect.mapError((e) => e));
 }
 const unusedCommand = Command$1.make("unused", {
@@ -270,12 +665,17 @@ const languagesCommand = Command$1.make("languages", {
 }, (flags) => runLanguages(flags));
 //#endregion
 //#region src/benchmark/metrics.ts
+const DEEPSEEK_INPUT_PRICE = .4;
+const DEEPSEEK_OUTPUT_PRICE = .6;
 function summarizeBenchmarkResults(results) {
 	const totalChunks = results.length;
 	const succeededChunks = results.filter((r) => r.succeeded).length;
 	const failedChunks = totalChunks - succeededChunks;
 	const totalDurationMs = results.reduce((sum, r) => sum + r.durationMs, 0);
 	const totalAttempts = results.reduce((sum, r) => sum + r.attemptCount, 0);
+	const totalPromptTokens = results.reduce((sum, r) => sum + (r.promptTokens ?? 0), 0);
+	const totalCompletionTokens = results.reduce((sum, r) => sum + (r.completionTokens ?? 0), 0);
+	const estimatedCostUsd = totalPromptTokens / 1e6 * DEEPSEEK_INPUT_PRICE + totalCompletionTokens / 1e6 * DEEPSEEK_OUTPUT_PRICE;
 	return {
 		strategyName: results[0]?.strategyName ?? "one-shot",
 		totalChunks,
@@ -283,21 +683,38 @@ function summarizeBenchmarkResults(results) {
 		failedChunks,
 		totalDurationMs,
 		averageDurationMsPerChunk: totalChunks > 0 ? totalDurationMs / totalChunks : 0,
-		totalAttempts
+		totalAttempts,
+		totalPromptTokens,
+		totalCompletionTokens,
+		estimatedCostUsd
 	};
+}
+let _globalUsage = null;
+function consumeChunkUsage() {
+	const u = _globalUsage ?? {
+		promptTokens: 0,
+		completionTokens: 0
+	};
+	_globalUsage = null;
+	return u;
 }
 function runBenchmarkedChunk(strategy, ctx) {
 	return Effect.gen(function* () {
 		const start = Date.now();
 		const result = yield* Effect.either(strategy.translateChunk(ctx));
 		const durationMs = Date.now() - start;
+		const usage = consumeChunkUsage();
 		if (result._tag === "Right") return {
 			strategyName: strategy.name,
 			chunkKeyCount: ctx.keys.length,
 			durationMs,
 			attemptCount: 1,
 			succeeded: true,
-			errorMessage: void 0
+			errorMessage: void 0,
+			...usage.promptTokens > 0 ? {
+				promptTokens: usage.promptTokens,
+				completionTokens: usage.completionTokens
+			} : {}
 		};
 		return {
 			strategyName: strategy.name,
@@ -305,7 +722,11 @@ function runBenchmarkedChunk(strategy, ctx) {
 			durationMs,
 			attemptCount: 1,
 			succeeded: false,
-			errorMessage: String(result.left.cause)
+			errorMessage: String(result.left.cause),
+			...usage.promptTokens > 0 ? {
+				promptTokens: usage.promptTokens,
+				completionTokens: usage.completionTokens
+			} : {}
 		};
 	});
 }
@@ -348,7 +769,8 @@ function runBenchmarkCommand(flags, deps) {
 				const targetMap = yield* a.readResource(entry.locale, entry.resource);
 				const chunks = chunkKeys(entry.missing, sourceMap, targetMap, {
 					maxTokens: effective.chunking.maxTokens,
-					charsPerToken: effective.chunking.charsPerToken
+					charsPerToken: effective.chunking.charsPerToken,
+					...Option.getOrUndefined(flags.chunkSize ?? Option.none()) !== void 0 ? { keysPerChunk: Option.getOrUndefined(flags.chunkSize ?? Option.none()) } : effective.chunking.keysPerChunk !== void 0 ? { keysPerChunk: effective.chunking.keysPerChunk } : {}
 				});
 				for (const keys of chunks) allChunks.push({
 					sourceLocale,
@@ -359,7 +781,8 @@ function runBenchmarkCommand(flags, deps) {
 				});
 			}
 		}
-		const sampled = allChunks.slice(0, Option.getOrElse(flags.sampleSize, () => 20));
+		const DEFAULT_SAMPLE_SIZE = 20;
+		const sampled = allChunks.slice(0, Option.getOrElse(flags.sampleSize, () => DEFAULT_SAMPLE_SIZE));
 		const summaries = yield* deps.benchmarkRunner({
 			strategies: strategyList,
 			chunks: sampled,
@@ -373,7 +796,10 @@ function runBenchmarkCommand(flags, deps) {
 			failedChunks: s.failedChunks,
 			totalDurationMs: s.totalDurationMs,
 			averageDurationMsPerChunk: s.averageDurationMsPerChunk,
-			totalAttempts: s.totalAttempts
+			totalAttempts: s.totalAttempts,
+			totalPromptTokens: s.totalPromptTokens,
+			totalCompletionTokens: s.totalCompletionTokens,
+			estimatedCostUsd: s.estimatedCostUsd
 		}));
 		yield* deps.logger(formatBenchmark(entries, format));
 	});
@@ -383,6 +809,7 @@ const benchmarkCommand = Command$1.make("benchmark", {
 	adapter: Options.optional(Options.text("adapter")),
 	strategies: Options.optional(Options.text("strategies")),
 	sampleSize: Options.optional(Options.integer("sample-size")),
+	chunkSize: Options.optional(Options.integer("chunk-size")),
 	format: Options.optional(Options.text("format"))
 }, (flags) => runBenchmarkCommand(flags, {
 	configLoader: loadConfig,
@@ -406,7 +833,7 @@ function resolveAdapter(raw) {
 		configCall: `paraglide({ messagesDir: './messages', scanPaths: ['./src'] })`
 	};
 	const pkg = raw.startsWith("npm:") ? raw.slice(4) : raw;
-	const base = pkg.replace(/^@[^/]+\//, "").replace(/[^a-zA-Z0-9]/g, "_");
+	const base = pkg.replace(/^@[^/]+\//, "").replace(/[^a-zA-Z_\d]/g, "_");
 	return {
 		packageName: pkg,
 		importName: base,
@@ -434,6 +861,7 @@ function detectPackageManager(fs, cwd) {
 		if (yield* fs.exists(`${cwd}/pnpm-lock.yaml`)) return "pnpm";
 		if (yield* fs.exists(`${cwd}/package-lock.json`)) return "npm";
 		if (yield* fs.exists(`${cwd}/yarn.lock`)) return "yarn";
+		if (yield* fs.exists(`${cwd}/bun.lockb`)) return "bun";
 		if (yield* fs.exists(`${cwd}/bun.lock`)) return "bun";
 		return "npm";
 	});
@@ -457,6 +885,16 @@ function installCommand(pm, packages) {
 		...packages
 	];
 	return Command.make(pm, ...args);
+}
+function installCommandString(pm, packages) {
+	const pkgList = packages.join(" ");
+	switch (pm) {
+		case "pnpm": return `pnpm add -D ${pkgList}`;
+		case "npm": return `npm install --save-dev ${pkgList}`;
+		case "yarn": return `yarn add -D ${pkgList}`;
+		case "bun": return `bun add -d ${pkgList}`;
+		default: return `npm install --save-dev ${pkgList}`;
+	}
 }
 function makeLiveDeps() {
 	return {
@@ -490,7 +928,8 @@ function runInit(flags, cwd, deps, logger = (msg) => Console.log(msg)) {
 		}
 		const adapterInfos = flags.adapter.map(resolveAdapter);
 		const allPackages = ["dialekt", ...adapterInfos.map((a) => a.packageName)];
-		const pm = yield* detectPackageManager(deps, cwd);
+		const pm = Option.getOrUndefined(flags.pm) ?? (yield* detectPackageManager(deps, cwd));
+		const installCmd = installCommandString(pm, allPackages);
 		if (!flags.noInstall) yield* deps.runInstall(pm, allPackages);
 		const content = buildConfigContent(adapterInfos);
 		yield* deps.writeFile(configPath, content);
@@ -500,21 +939,29 @@ function runInit(flags, cwd, deps, logger = (msg) => Console.log(msg)) {
 			configPath,
 			packageManager: pm,
 			installed: flags.noInstall ? [] : allPackages,
-			skippedInstall: flags.noInstall
+			skippedInstall: flags.noInstall,
+			installCommands: flags.noInstall ? [installCmd] : []
 		}, format));
 	});
 }
+const pmOption = Options.optional(Options.choice("pm", [
+	"npm",
+	"pnpm",
+	"bun"
+])).pipe(Options.withDescription("Package manager to use for installing dependencies (npm, pnpm, bun)"));
 const initCommand = Command$1.make("init", {
 	adapter: Options.repeated(Options.text("adapter")),
 	noInstall: Options.boolean("no-install").pipe(Options.withDefault(false)),
-	format: Options.optional(Options.text("format"))
+	format: Options.optional(Options.text("format")),
+	pm: pmOption
 }, (flags) => {
 	const cwd = process.cwd();
 	const deps = makeLiveDeps();
 	return runInit({
 		adapter: flags.adapter,
 		noInstall: flags.noInstall,
-		format: flags.format
+		format: flags.format,
+		pm: flags.pm
 	}, cwd, deps);
 });
 //#endregion

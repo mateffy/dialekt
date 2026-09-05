@@ -12,6 +12,7 @@ export interface InitFlags {
   readonly adapter: ReadonlyArray<string>;
   readonly noInstall: boolean;
   readonly format?: Option.Option<string>;
+  readonly pm: Option.Option<PackageManager>;
 }
 
 export interface AdapterInfo {
@@ -85,6 +86,7 @@ export function detectPackageManager(
     if (yield* fs.exists(`${cwd}/pnpm-lock.yaml`)) return "pnpm";
     if (yield* fs.exists(`${cwd}/package-lock.json`)) return "npm";
     if (yield* fs.exists(`${cwd}/yarn.lock`)) return "yarn";
+    if (yield* fs.exists(`${cwd}/bun.lockb`)) return "bun";
     if (yield* fs.exists(`${cwd}/bun.lock`)) return "bun";
     return "npm";
   });
@@ -103,6 +105,25 @@ export function installCommand(
           ? ["add", "-D", ...packages]
           : ["add", "-d", ...packages];
   return PlatformCommand.make(pm, ...args);
+}
+
+export function installCommandString(
+  pm: PackageManager,
+  packages: ReadonlyArray<string>,
+): string {
+  const pkgList = packages.join(" ");
+  switch (pm) {
+    case "pnpm":
+      return `pnpm add -D ${pkgList}`;
+    case "npm":
+      return `npm install --save-dev ${pkgList}`;
+    case "yarn":
+      return `yarn add -D ${pkgList}`;
+    case "bun":
+      return `bun add -d ${pkgList}`;
+    default:
+      return `npm install --save-dev ${pkgList}`;
+  }
 }
 
 export function makeLiveDeps(): InitDeps {
@@ -159,7 +180,10 @@ export function runInit(
     const adapterInfos = flags.adapter.map(resolveAdapter);
     const allPackages = ["dialekt", ...adapterInfos.map((a) => a.packageName)];
 
-    const pm = yield* detectPackageManager(deps, cwd);
+    const explicitPm = Option.getOrUndefined(flags.pm);
+    const pm = explicitPm ?? (yield* detectPackageManager(deps, cwd));
+
+    const installCmd = installCommandString(pm, allPackages);
 
     if (!flags.noInstall) {
       yield* deps.runInstall(pm, allPackages);
@@ -175,11 +199,16 @@ export function runInit(
       packageManager: pm,
       installed: flags.noInstall ? [] : allPackages,
       skippedInstall: flags.noInstall,
+      installCommands: flags.noInstall ? [installCmd] : [],
     };
 
     yield* logger(formatInit(result, format));
   });
 }
+
+const pmOption = Options.optional(
+  Options.choice("pm", ["npm", "pnpm", "bun"] as const),
+).pipe(Options.withDescription("Package manager to use for installing dependencies (npm, pnpm, bun)"));
 
 export const initCommand = Command.make(
   "init",
@@ -187,6 +216,7 @@ export const initCommand = Command.make(
     adapter: Options.repeated(Options.text("adapter")),
     noInstall: Options.boolean("no-install").pipe(Options.withDefault(false)),
     format: Options.optional(Options.text("format")),
+    pm: pmOption,
   },
   (flags) => {
     const cwd = process.cwd();
@@ -196,6 +226,7 @@ export const initCommand = Command.make(
         adapter: flags.adapter,
         noInstall: flags.noInstall,
         format: flags.format,
+        pm: flags.pm,
       },
       cwd,
       deps,

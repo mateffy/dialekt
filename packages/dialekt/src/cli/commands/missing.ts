@@ -47,9 +47,12 @@ export function runMissing(
     }> = [];
 
     for (const a of effective.adapters) {
-      const locales = yield* a.listLocales();
       const sourceLocale = effective.sourceLocale;
-      const targets = locales.filter((l) => l !== sourceLocale);
+      // Respect targetLocales from config/flags, otherwise all locales minus source.
+      const targets =
+        effective.targetLocales && effective.targetLocales.length > 0
+          ? effective.targetLocales.filter((l: string) => l !== sourceLocale)
+          : (yield* a.listLocales()).filter((l: string) => l !== sourceLocale);
 
       const entries = yield* missingKeysComputer(a, sourceLocale, targets);
       for (const entry of entries) {

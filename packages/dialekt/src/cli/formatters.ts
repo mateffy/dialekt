@@ -30,6 +30,9 @@ const C = {
   cyan: "\x1b[36m",
 } as const;
 
+const D = C.dim;
+const W = C.reset;
+
 // ─── Missing keys formatter ──────────────────────────────────────────────────
 
 export interface MissingKeyEntry {
@@ -228,6 +231,17 @@ export interface TranslateResult {
     readonly adaptersProcessed: number;
     readonly localesTranslated: number;
     readonly keysTranslated: number;
+    readonly totalSourceKeys?: number;
+    readonly perLocale?: Record<string, { translated: number; remaining: number }>;
+    readonly chunkStats?: {
+      readonly chunkCount: number;
+      readonly avgDurationMs: number;
+      readonly minDurationMs: number;
+      readonly maxDurationMs: number;
+      readonly totalPromptTokens: number;
+      readonly totalCompletionTokens: number;
+      readonly estimatedCostUsd: number;
+    };
   };
 }
 
@@ -242,12 +256,44 @@ export function formatTranslate(result: TranslateResult, format: OutputFormat): 
       lines.push("");
       lines.push(keyValue("Adapters:", result.stats.adaptersProcessed.toString()));
       lines.push(keyValue("Locales:", result.stats.localesTranslated.toString()));
-      lines.push(keyValue("Keys:", result.stats.keysTranslated.toString()));
+      lines.push(keyValue("Keys translated:", result.stats.keysTranslated.toString()));
+      if (result.stats.totalSourceKeys !== undefined) {
+        lines.push(keyValue("Source keys:", result.stats.totalSourceKeys.toString()));
+      }
+      if (result.stats.chunkStats) {
+        const cs = result.stats.chunkStats;
+        lines.push("");
+        lines.push(D + "  chunks  total time     avg    min    max" + W);
+        const time = (cs.avgDurationMs * cs.chunkCount);
+        lines.push(`  ${cs.chunkCount.toString().padEnd(7)} ${formatMs(time).padEnd(13)} ${formatMs(cs.avgDurationMs).padEnd(6)} ${formatMs(cs.minDurationMs).padEnd(6)} ${formatMs(cs.maxDurationMs)}`);
+        lines.push("");
+        lines.push(D + "  tokens           count" + W);
+        lines.push(`  prompt           ${cs.totalPromptTokens.toLocaleString()}`);
+        lines.push(`  completion       ${cs.totalCompletionTokens.toLocaleString()}`);
+        lines.push(`  total            ${(cs.totalPromptTokens + cs.totalCompletionTokens).toLocaleString()}`);
+        lines.push("");
+        lines.push(keyValue("Est. cost:", `$${cs.estimatedCostUsd.toFixed(4)}`));
+      }
+      if (result.stats.perLocale) {
+        lines.push("");
+        lines.push(D + "  locale       translated  remaining" + W);
+        for (const [loc, { translated, remaining }] of Object.entries(result.stats.perLocale).sort()) {
+          const t = translated > 0 ? C.green + String(translated) + W : D + "—" + W;
+          const r = remaining > 0 ? C.yellow + String(remaining) + W : C.green + "0" + W;
+          lines.push(`  ${padEnd(loc, 12)} ${t}        ${r}`);
+        }
+      }
     }
     return lines.join("\n") + "\n";
   }
 
   return failure(result.message) + "\n";
+}
+
+function formatMs(ms: number): string {
+  if (ms >= 60000) return (ms / 60000).toFixed(1) + "m";
+  if (ms >= 1000) return (ms / 1000).toFixed(1) + "s";
+  return Math.round(ms) + "ms";
 }
 
 // ─── Add formatter ───────────────────────────────────────────────────────────
@@ -287,6 +333,7 @@ export interface InitResult {
   readonly packageManager?: string;
   readonly installed?: readonly string[];
   readonly skippedInstall?: boolean;
+  readonly installCommands?: readonly string[];
 }
 
 export function formatInit(result: InitResult, format: OutputFormat): string {
@@ -320,9 +367,16 @@ export function formatInit(result: InitResult, format: OutputFormat): string {
 
   if (result.skippedInstall) {
     lines.push("");
-    lines.push(
-      info("Install skipped. Run your package manager manually to install the packages above."),
-    );
+    if (result.installCommands && result.installCommands.length > 0) {
+      lines.push(color("Run the following to install:", C.dim));
+      for (const cmd of result.installCommands) {
+        lines.push(`  ${color(`$ ${cmd}`, C.cyan)}`);
+      }
+    } else {
+      lines.push(
+        info("Install skipped. Run your package manager manually to install the packages above."),
+      );
+    }
   }
 
   return lines.join("\n") + "\n";
@@ -374,4 +428,8 @@ export function formatError(message: string, format: OutputFormat): string {
     return JSON.stringify({ error: message }, null, 2) + "\n";
   }
   return failure(message) + "\n";
+}
+
+function padEnd(s: string, n: number): string {
+  return s.length >= n ? s : s + " ".repeat(n - s.length);
 }

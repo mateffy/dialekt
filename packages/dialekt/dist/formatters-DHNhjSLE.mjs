@@ -4,6 +4,7 @@ import { Output, ToolLoopAgent, generateText, hasToolCall, tool } from "ai";
 import { z } from "zod";
 import { createJiti } from "jiti";
 import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 //#region src/keys/flatten.ts
 function flattenObject(input, prefix = "") {
 	const output = {};
@@ -14,14 +15,42 @@ function flattenObject(input, prefix = "") {
 	}
 	return output;
 }
+/**
+* Unflatten dot-separated keys into a nested object.
+*
+* Special handling: when the input has BOTH a plain scalar key (e.g. `password`)
+* AND dotted keys that would nest under it (e.g. `password.letters`), the dotted
+* keys are kept as literal dot-containing keys at the top level — they are NOT
+* nested. This preserves round-trip fidelity for PHP files that use dot-notation
+* keys alongside plain scalar keys.
+*/
 function unflattenObject(input) {
+	const conflictParent = /* @__PURE__ */ new Set();
+	for (const key of Object.keys(input)) {
+		const dot = key.indexOf(".");
+		if (dot < 0) continue;
+		const parent = key.slice(0, dot);
+		if (input[parent] !== void 0) conflictParent.add(parent);
+	}
 	const output = {};
-	for (const [dottedKey, value] of Object.entries(input)) {
-		const segments = dottedKey.split(".");
+	for (const [key, value] of Object.entries(input)) {
+		if (conflictParent.size > 0) {
+			const dot = key.indexOf(".");
+			if (dot > 0 && conflictParent.has(key.slice(0, dot))) {
+				output[key] = value;
+				continue;
+			}
+			if (conflictParent.has(key)) {
+				output[key] = value;
+				continue;
+			}
+		}
+		const segments = key.split(".");
 		let cursor = output;
 		for (let i = 0; i < segments.length - 1; i++) {
 			const segment = segments[i];
-			if (typeof cursor[segment] !== "object" || cursor[segment] === null) cursor[segment] = {};
+			const existing = cursor[segment];
+			if (typeof existing !== "object" || existing === null || Array.isArray(existing)) cursor[segment] = {};
 			cursor = cursor[segment];
 		}
 		cursor[segments[segments.length - 1]] = value;
@@ -37,11 +66,14 @@ const PROMPT_OVERHEAD = 600;
 const ITEM_JSON_OVERHEAD = 20;
 const MIN_EFFECTIVE_MAX_CHARS = 200;
 function chunkKeys(keys, sourceMap, targetMap, config) {
+	if (config.keysPerChunk !== void 0 && config.keysPerChunk > 0) {
+		const size = config.keysPerChunk;
+		const out = [];
+		for (let i = 0; i < keys.length; i += size) out.push(keys.slice(i, i + size));
+		return out;
+	}
 	const maxChars = config.maxTokens * config.charsPerToken;
-	const sourceJson = JSON.stringify(sourceMap);
-	const targetJson = JSON.stringify(targetMap);
-	const contextOverhead = (sourceJson?.length ?? 0) + (targetJson?.length ?? 0) + PROMPT_OVERHEAD;
-	const effectiveMaxChars = Math.max(MIN_EFFECTIVE_MAX_CHARS, maxChars - contextOverhead);
+	const effectiveMaxChars = Math.max(MIN_EFFECTIVE_MAX_CHARS, maxChars - PROMPT_OVERHEAD);
 	const chunks = [];
 	let currentChunk = [];
 	let currentChars = 0;
@@ -94,6 +126,13 @@ function resolveModel(config) {
 				case "openai": {
 					const { openai } = await import("@ai-sdk/openai");
 					return openai(config.modelId);
+				}
+				case "openrouter": {
+					const { createOpenAI } = await import("@ai-sdk/openai");
+					return createOpenAI({
+						baseURL: "https://openrouter.ai/api/v1",
+						apiKey: process.env.OPENROUTER_API_KEY ?? ""
+					})(config.modelId);
 				}
 				case "anthropic": {
 					const { anthropic } = await import("@ai-sdk/anthropic");
@@ -151,25 +190,42 @@ Translate ALL keys listed in <keys-to-translate>. Use the existing translations 
 }
 //#endregion
 //#region src/translation/one-shot-strategy.ts
-async function tryTranslateChunk$1(model, ctx) {
-	const schema = z.object(Object.fromEntries(ctx.keys.map((key) => [key, z.string()])));
-	const { output } = await generateText({
-		model,
-		system: buildSystemPrompt(ctx.sourceLocale, ctx.targetLocale),
-		prompt: buildUserPrompt(ctx),
-		output: Output.object({ schema })
+function tryTranslateChunk$1(model, ctx, onTrace) {
+	return Effect.gen(function* () {
+		const schema = z.object(Object.fromEntries(ctx.keys.map((key) => [key, z.string()])));
+		const start = Date.now();
+		const result = yield* Effect.tryPromise({
+			try: () => generateText({
+				model,
+				system: buildSystemPrompt(ctx.sourceLocale, ctx.targetLocale),
+				prompt: buildUserPrompt(ctx),
+				output: Output.object({ schema })
+			}),
+			catch: (cause) => new Error(String(cause))
+		});
+		const durationMs = Date.now() - start;
+		const output = result.output;
+		onTrace?.({
+			sourceLocale: ctx.sourceLocale,
+			targetLocale: ctx.targetLocale,
+			...ctx.resource !== void 0 ? { resource: ctx.resource } : {},
+			keys: ctx.keys,
+			sourceTexts: ctx.sourceMap,
+			text: result.text ?? "",
+			output,
+			durationMs,
+			promptTokens: result.usage?.promptTokens ?? result.usage?.inputTokens ?? 0,
+			completionTokens: result.usage?.completionTokens ?? result.usage?.outputTokens ?? 0
+		});
+		const missing = ctx.keys.filter((key) => !(key in output));
+		if (missing.length > 0) return yield* Effect.fail(/* @__PURE__ */ new Error(`Model omitted keys: ${missing.join(", ")}`));
+		return output;
 	});
-	const missing = ctx.keys.filter((key) => !(key in output));
-	if (missing.length > 0) throw new Error(`Model omitted keys: ${missing.join(", ")}`);
-	return output;
 }
 function createOneShotStrategy(deps) {
 	return {
 		name: "one-shot",
-		translateChunk: (ctx) => Effect.tryPromise({
-			try: () => tryTranslateChunk$1(deps.model, ctx),
-			catch: (cause) => cause
-		}).pipe(Effect.retry(Schedule.exponential(`${deps.retry.baseDelayMs} millis`).pipe(Schedule.compose(Schedule.recurs(deps.retry.maxAttempts - 1)))), Effect.mapError((cause) => new TranslationFailedError({
+		translateChunk: (ctx) => tryTranslateChunk$1(deps.model, ctx, deps.onTrace).pipe(Effect.retry(Schedule.exponential(`${deps.retry.baseDelayMs} millis`).pipe(Schedule.compose(Schedule.recurs(deps.retry.maxAttempts - 1)))), Effect.mapError((cause) => new TranslationFailedError({
 			keys: ctx.keys,
 			cause
 		})))
@@ -177,35 +233,51 @@ function createOneShotStrategy(deps) {
 }
 //#endregion
 //#region src/translation/tool-loop-strategy.ts
-async function tryTranslateChunk(model, ctx) {
-	const schema = z.object(Object.fromEntries(ctx.keys.map((key) => [key, z.string()])));
-	let captured = null;
-	const submitTranslations = tool({
-		description: "Submit the final translations for every requested key. Call this exactly once, with every key filled in.",
-		inputSchema: schema,
-		execute: async (input) => {
-			captured = input;
-			return { ok: true };
-		}
+function tryTranslateChunk(model, ctx, onTrace) {
+	return Effect.gen(function* () {
+		const schema = z.object(Object.fromEntries(ctx.keys.map((key) => [key, z.string()])));
+		let captured = null;
+		const submitTranslations = tool({
+			description: "Submit the final translations for every requested key. Call this exactly once, with every key filled in.",
+			inputSchema: schema,
+			execute: (input) => {
+				captured = input;
+				return Promise.resolve({ ok: true });
+			}
+		});
+		const agent = new ToolLoopAgent({
+			model,
+			instructions: buildSystemPrompt(ctx.sourceLocale, ctx.targetLocale),
+			tools: { submitTranslations },
+			stopWhen: hasToolCall("submitTranslations")
+		});
+		yield* Effect.tryPromise({
+			try: () => agent.generate({ prompt: buildUserPrompt(ctx) }),
+			catch: (cause) => new Error(String(cause))
+		});
+		if (captured === null) return yield* Effect.fail(/* @__PURE__ */ new Error("Agent finished without calling submitTranslations"));
+		const result = captured;
+		onTrace?.({
+			sourceLocale: ctx.sourceLocale,
+			targetLocale: ctx.targetLocale,
+			keys: ctx.keys,
+			sourceTexts: ctx.sourceMap,
+			text: "",
+			output: result,
+			durationMs: 0,
+			promptTokens: 0,
+			completionTokens: 0,
+			...ctx.resource !== void 0 ? { resource: ctx.resource } : {}
+		});
+		const missing = ctx.keys.filter((key) => !(key in result));
+		if (missing.length > 0) return yield* Effect.fail(/* @__PURE__ */ new Error(`Model omitted keys: ${missing.join(", ")}`));
+		return result;
 	});
-	await new ToolLoopAgent({
-		model,
-		instructions: buildSystemPrompt(ctx.sourceLocale, ctx.targetLocale),
-		tools: { submitTranslations },
-		stopWhen: hasToolCall("submitTranslations")
-	}).generate({ prompt: buildUserPrompt(ctx) });
-	if (captured === null) throw new Error("Agent finished without calling submitTranslations");
-	const missing = ctx.keys.filter((key) => !(key in captured));
-	if (missing.length > 0) throw new Error(`Model omitted keys: ${missing.join(", ")}`);
-	return captured;
 }
 function createToolLoopStrategy(deps) {
 	return {
 		name: "tool-loop-agent",
-		translateChunk: (ctx) => Effect.tryPromise({
-			try: () => tryTranslateChunk(deps.model, ctx),
-			catch: (cause) => cause
-		}).pipe(Effect.retry(Schedule.exponential(`${deps.retry.baseDelayMs} millis`).pipe(Schedule.compose(Schedule.recurs(deps.retry.maxAttempts - 1)))), Effect.mapError((cause) => new TranslationFailedError({
+		translateChunk: (ctx) => tryTranslateChunk(deps.model, ctx, deps.onTrace).pipe(Effect.retry(Schedule.exponential(`${deps.retry.baseDelayMs} millis`).pipe(Schedule.compose(Schedule.recurs(deps.retry.maxAttempts - 1)))), Effect.mapError((cause) => new TranslationFailedError({
 			keys: ctx.keys,
 			cause
 		})))
@@ -213,46 +285,128 @@ function createToolLoopStrategy(deps) {
 }
 //#endregion
 //#region src/translation/orchestrator.ts
-function runTranslation(config) {
+/**
+* Translate missing keys in one resource file. Chunks translate serially within
+* a resource so we can write after each chunk (resumability). Different resources
+* run in parallel since they write to different files.
+*/
+function translateResource(adapter, strategy, chunking, sourceLocale, targetLocale, resource, failures, onProgress) {
+	return Effect.gen(function* () {
+		const sourceMap = yield* adapter.readResource(sourceLocale, resource);
+		const targetMap = yield* adapter.readResource(targetLocale, resource);
+		const missing = diffKeys(sourceMap, targetMap);
+		if (missing.length === 0) return;
+		const chunkCfg = {
+			maxTokens: chunking.maxTokens,
+			charsPerToken: chunking.charsPerToken
+		};
+		if (chunking.keysPerChunk !== void 0) chunkCfg.keysPerChunk = chunking.keysPerChunk;
+		const chunks = chunkKeys(missing, sourceMap, targetMap, chunkCfg);
+		const ctx = {
+			sourceLocale,
+			targetLocale,
+			sourceMap,
+			targetMap
+		};
+		const merged = { ...targetMap };
+		for (const keys of chunks) {
+			const chunkCtx = {
+				...ctx,
+				keys,
+				resource: resource.label
+			};
+			onProgress?.({
+				type: "chunk-start",
+				locale: targetLocale,
+				resource: resource.label
+			});
+			const result = yield* Effect.either(strategy.translateChunk(chunkCtx));
+			if (result._tag === "Right") {
+				Object.assign(merged, result.right);
+				yield* adapter.writeResource(targetLocale, resource, { ...merged });
+				onProgress?.({
+					type: "chunk-complete",
+					locale: targetLocale,
+					resource: resource.label
+				});
+			} else {
+				failures.push(result.left);
+				onProgress?.({
+					type: "chunk-fail",
+					locale: targetLocale,
+					resource: resource.label
+				});
+			}
+		}
+	});
+}
+function runTranslation(config, onProgress) {
 	return Effect.gen(function* () {
 		const failures = [];
 		for (const adapter of config.adapters) {
-			const locales = config.targetLocales.length > 0 ? config.targetLocales : yield* adapter.listLocales();
+			const allLocales = yield* adapter.listLocales();
 			const sourceLocale = config.sourceLocale;
-			const targetLocales = locales.filter((l) => l !== sourceLocale);
+			let targetLocales = config.targetLocales.length > 0 ? config.targetLocales.filter((l) => l !== sourceLocale) : allLocales.filter((l) => l !== sourceLocale);
+			if (targetLocales.length === 0) targetLocales = allLocales.filter((l) => l !== sourceLocale);
+			const localeJobs = [];
 			for (const locale of targetLocales) {
-				const resources = yield* adapter.listResources(sourceLocale);
-				for (const resource of resources) {
-					const sourceMap = yield* adapter.readResource(sourceLocale, resource);
-					const targetMap = yield* adapter.readResource(locale, resource);
-					const missing = diffKeys(sourceMap, targetMap);
-					if (missing.length === 0) continue;
-					const chunks = chunkKeys(missing, sourceMap, targetMap, {
-						maxTokens: config.chunking.maxTokens,
-						charsPerToken: config.chunking.charsPerToken
-					});
-					const translatedChunks = [];
-					yield* Effect.forEach(chunks, (chunkKeysArr) => Effect.gen(function* () {
-						const result = yield* config.strategy.translateChunk({
-							sourceLocale,
-							targetLocale: locale,
-							sourceMap,
-							targetMap,
-							keys: chunkKeysArr
+				const allRes = yield* adapter.listResources(sourceLocale);
+				const filtered = config.resourceFilter ? allRes.filter((r) => r.key === config.resourceFilter || r.label === config.resourceFilter || r.key.startsWith(config.resourceFilter)) : allRes;
+				let totalMissing = 0;
+				let totalChunks = 0;
+				for (const resource of filtered) {
+					const srcMap = yield* adapter.readResource(sourceLocale, resource);
+					const tgtMap = yield* adapter.readResource(locale, resource);
+					const missing = diffKeys(srcMap, tgtMap);
+					totalMissing += missing.length;
+					if (missing.length > 0) {
+						const c = chunkKeys(missing, srcMap, tgtMap, {
+							maxTokens: config.chunking.maxTokens,
+							charsPerToken: config.chunking.charsPerToken,
+							...config.chunking.keysPerChunk !== void 0 ? { keysPerChunk: config.chunking.keysPerChunk } : {}
 						});
-						translatedChunks.push(result);
-					}).pipe(Effect.catchAll((err) => {
-						failures.push(err);
-						return Effect.void;
-					})), {
-						concurrency: config.chunking.concurrency,
-						discard: true
-					});
-					const merged = { ...targetMap };
-					for (const chunk of translatedChunks) Object.assign(merged, chunk);
-					yield* adapter.writeResource(locale, resource, merged);
+						totalChunks += c.length;
+					}
 				}
+				onProgress?.({
+					type: "locale-scanned",
+					locale,
+					missingKeys: totalMissing,
+					chunksTotal: totalChunks
+				});
+				localeJobs.push({
+					locale,
+					resources: [...filtered]
+				});
 			}
+			yield* Effect.forEach(localeJobs, ({ locale, resources }) => Effect.gen(function* () {
+				onProgress?.({
+					type: "locale-start",
+					locale,
+					resourcesTotal: resources.length
+				});
+				let chOk = 0;
+				let chFail = 0;
+				if ((yield* Effect.forEach(resources, (res) => translateResource(adapter, config.strategy, {
+					maxTokens: config.chunking.maxTokens,
+					charsPerToken: config.chunking.charsPerToken,
+					...config.chunking.keysPerChunk !== void 0 ? { keysPerChunk: config.chunking.keysPerChunk } : {}
+				}, sourceLocale, locale, res, failures, (e) => {
+					if (e.type === "chunk-complete") chOk++;
+					else if (e.type === "chunk-fail") chFail++;
+					onProgress?.(e);
+				}).pipe(Effect.either), {
+					concurrency: config.chunking.concurrency,
+					discard: false
+				})).some((r) => r._tag === "Left") || chFail > 0) onProgress?.({
+					type: "locale-error",
+					locale
+				});
+				else onProgress?.({
+					type: "locale-done",
+					locale
+				});
+			}), { concurrency: config.chunking.concurrency });
 		}
 		if (failures.length > 0) return yield* Effect.fail(new TranslationFailedError({
 			keys: failures.flatMap((f) => [...f.keys]),
@@ -275,19 +429,58 @@ function computeMissingKeys(adapter, sourceLocale, targetLocales) {
 					resource,
 					missing
 				}] : [];
-			}))).flat();
-		}))).flat();
+			}), { concurrency: targetLocales.length })).flat();
+		}), { concurrency: Math.min(resources.length, 10) })).flat();
 	});
 }
 //#endregion
 //#region src/config/load-config.ts
+/** Parse a simple KEY=VAL .env file. Returns a map, skips comments and blanks. */
+function parseEnvFile(path) {
+	const out = {};
+	for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#")) continue;
+		const eq = trimmed.indexOf("=");
+		if (eq < 0) continue;
+		const key = trimmed.slice(0, eq).trim();
+		let val = trimmed.slice(eq + 1).trim();
+		if (val.startsWith("\"") && val.endsWith("\"") || val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1);
+		out[key] = val;
+	}
+	return out;
+}
 var ConfigLoadError = class extends Data.TaggedError("ConfigLoadError") {};
+/** Package specifiers the config file might import that jiti can't resolve from cwd. */
+const knownSpecifiers = [
+	"dialekt",
+	"@dialekt/adapter-android",
+	"@dialekt/adapter-arb",
+	"@dialekt/adapter-csv",
+	"@dialekt/adapter-ios",
+	"@dialekt/adapter-json",
+	"@dialekt/adapter-laravel",
+	"@dialekt/adapter-paraglide",
+	"@dialekt/adapter-po",
+	"@dialekt/adapter-properties",
+	"@dialekt/adapter-xliff",
+	"@dialekt/adapter-yaml"
+];
 function loadConfig(configPath) {
 	return Effect.tryPromise({
 		try: async () => {
-			const jiti = createJiti(process.cwd());
+			const virtualModules = {};
+			for (const spec of knownSpecifiers) try {
+				virtualModules[spec] = await import(spec);
+			} catch {}
+			const jiti = createJiti(process.cwd(), { virtualModules });
 			const absolutePath = resolve(configPath);
-			return await jiti.import(absolutePath, { default: true });
+			const mod = await jiti.import(absolutePath, { default: true });
+			for (const envPath of mod.env ?? []) {
+				const resolved = resolve(envPath);
+				if (existsSync(resolved)) for (const [k, v] of Object.entries(parseEnvFile(resolved))) process.env[k] ??= v;
+			}
+			return mod;
 		},
 		catch: (cause) => new ConfigLoadError({
 			path: configPath,
@@ -399,8 +592,10 @@ function drawTable(headers, rows) {
 		bottomLine
 	].join("\n");
 }
+const BANNER_SIDE_PADDING = 4;
+const BANNER_MIN_WIDTH = 40;
 function banner(title) {
-	const line = glyphs().hLine.repeat(Math.max(title.length + 4, 40));
+	const line = glyphs().hLine.repeat(Math.max(title.length + BANNER_SIDE_PADDING, BANNER_MIN_WIDTH));
 	return `${color(line, C$1.dim)}\n  ${color(title, C$1.bold + C$1.cyan)}\n${color(line, C$1.dim)}`;
 }
 function sectionHeader(label) {
@@ -439,6 +634,8 @@ const C = {
 	blue: "\x1B[34m",
 	cyan: "\x1B[36m"
 };
+const D = C.dim;
+const W = C.reset;
 function formatMissingKeys(entries, format) {
 	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
 	if (entries.length === 0) return success("All translations are complete. No missing keys.") + "\n";
@@ -546,11 +743,40 @@ function formatTranslate(result, format) {
 			lines.push("");
 			lines.push(keyValue("Adapters:", result.stats.adaptersProcessed.toString()));
 			lines.push(keyValue("Locales:", result.stats.localesTranslated.toString()));
-			lines.push(keyValue("Keys:", result.stats.keysTranslated.toString()));
+			lines.push(keyValue("Keys translated:", result.stats.keysTranslated.toString()));
+			if (result.stats.totalSourceKeys !== void 0) lines.push(keyValue("Source keys:", result.stats.totalSourceKeys.toString()));
+			if (result.stats.chunkStats) {
+				const cs = result.stats.chunkStats;
+				lines.push("");
+				lines.push(D + "  chunks  total time     avg    min    max" + W);
+				const time = cs.avgDurationMs * cs.chunkCount;
+				lines.push(`  ${cs.chunkCount.toString().padEnd(7)} ${formatMs(time).padEnd(13)} ${formatMs(cs.avgDurationMs).padEnd(6)} ${formatMs(cs.minDurationMs).padEnd(6)} ${formatMs(cs.maxDurationMs)}`);
+				lines.push("");
+				lines.push(D + "  tokens           count" + W);
+				lines.push(`  prompt           ${cs.totalPromptTokens.toLocaleString()}`);
+				lines.push(`  completion       ${cs.totalCompletionTokens.toLocaleString()}`);
+				lines.push(`  total            ${(cs.totalPromptTokens + cs.totalCompletionTokens).toLocaleString()}`);
+				lines.push("");
+				lines.push(keyValue("Est. cost:", `$${cs.estimatedCostUsd.toFixed(4)}`));
+			}
+			if (result.stats.perLocale) {
+				lines.push("");
+				lines.push(D + "  locale       translated  remaining" + W);
+				for (const [loc, { translated, remaining }] of Object.entries(result.stats.perLocale).sort()) {
+					const t = translated > 0 ? C.green + String(translated) + W : D + "—" + W;
+					const r = remaining > 0 ? C.yellow + String(remaining) + W : C.green + "0" + W;
+					lines.push(`  ${padEnd(loc, 12)} ${t}        ${r}`);
+				}
+			}
 		}
 		return lines.join("\n") + "\n";
 	}
 	return failure(result.message) + "\n";
+}
+function formatMs(ms) {
+	if (ms >= 6e4) return (ms / 6e4).toFixed(1) + "m";
+	if (ms >= 1e3) return (ms / 1e3).toFixed(1) + "s";
+	return Math.round(ms) + "ms";
 }
 function formatAdd(result, format) {
 	if (format === "json") return JSON.stringify(result, null, 2) + "\n";
@@ -582,7 +808,10 @@ function formatInit(result, format) {
 	}
 	if (result.skippedInstall) {
 		lines.push("");
-		lines.push(info("Install skipped. Run your package manager manually to install the packages above."));
+		if (result.installCommands && result.installCommands.length > 0) {
+			lines.push(color("Run the following to install:", C.dim));
+			for (const cmd of result.installCommands) lines.push(`  ${color(`$ ${cmd}`, C.cyan)}`);
+		} else lines.push(info("Install skipped. Run your package manager manually to install the packages above."));
 	}
 	return lines.join("\n") + "\n";
 }
@@ -611,6 +840,9 @@ function formatBenchmark(entries, format) {
 function formatError(message, format) {
 	if (format === "json") return JSON.stringify({ error: message }, null, 2) + "\n";
 	return failure(message) + "\n";
+}
+function padEnd(s, n) {
+	return s.length >= n ? s : s + " ".repeat(n - s.length);
 }
 //#endregion
 export { UnknownProviderError as A, computeMissingKeys as C, buildSystemPrompt as D, createOneShotStrategy as E, diffKeys as F, flattenObject as I, unflattenObject as L, readFileIfExists as M, writeFileEnsuringDir as N, buildUserPrompt as O, chunkKeys as P, loadConfig as S, createToolLoopStrategy as T, keyValue as _, formatLanguages as a, warning as b, formatUnusedKeys as c, color as d, detectFormat as f, info as g, glyphs as h, formatInit as i, resolveModel as j, TranslationFailedError as k, formatValidate as l, failure as m, formatBenchmark as n, formatMissingKeys as o, drawTable as p, formatError as r, formatTranslate as s, formatAdd as t, banner as u, sectionHeader as v, runTranslation as w, ConfigLoadError as x, success as y };

@@ -17,7 +17,7 @@ export interface ParaglideAdapterOptions {
 
 function listParaglideLocales(
   messagesDir: string,
-): Effect.Effect<readonly string[], AdapterReadError, FileSystem.FileSystem | Path.Path> {
+): Effect.Effect<readonly string[], AdapterReadError, FileSystem | Path> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem;
     const path = yield* Path;
@@ -50,7 +50,7 @@ function readParaglideResource(
   messagesDir: string,
   locale: string,
   resource: ResourceRef,
-): Effect.Effect<Record<string, string>, AdapterReadError, Path.Path> {
+): Effect.Effect<Record<string, string>, AdapterReadError, FileSystem | Path> {
   return Effect.gen(function* () {
     const path = yield* Path;
     const filePath = path.join(messagesDir, `${locale}.json`);
@@ -74,7 +74,7 @@ function writeParaglideResource(
   locale: string,
   resource: ResourceRef,
   entries: Record<string, string>,
-): Effect.Effect<void, AdapterWriteError, Path.Path> {
+): Effect.Effect<void, AdapterWriteError, FileSystem | Path> {
   return Effect.gen(function* () {
     const path = yield* Path;
     const filePath = path.join(messagesDir, `${locale}.json`);
@@ -100,7 +100,7 @@ function findUnusedParaglideAdapterKeys(
   scanPaths: readonly string[],
   locale: string,
   resource: ResourceRef,
-): Effect.Effect<readonly string[], AdapterReadError, Path.Path> {
+): Effect.Effect<readonly string[], AdapterReadError, FileSystem | Path> {
   return Effect.gen(function* () {
     const path = yield* Path;
     const adapterScanPaths = scanPaths.length > 0 ? scanPaths : [path.resolve(messagesDir, "..")];

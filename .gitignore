@@ -25,3 +25,7 @@ Homestead.json
 .idea
 
 packages/*/node_modules
+packages/*/test-*.mjs
+*.tgz
+AGENTLOG.md
+prototype/

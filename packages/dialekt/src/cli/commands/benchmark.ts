@@ -20,6 +20,7 @@ export interface BenchmarkFlags {
   readonly adapter: Option.Option<string>;
   readonly strategies: Option.Option<string>;
   readonly sampleSize: Option.Option<number>;
+  readonly chunkSize?: Option.Option<number>;
   readonly format?: Option.Option<string>;
 }
 
@@ -106,6 +107,11 @@ export function runBenchmarkCommand(
         const chunks = chunkKeys(entry.missing, sourceMap, targetMap, {
           maxTokens: effective.chunking.maxTokens,
           charsPerToken: effective.chunking.charsPerToken,
+          ...(Option.getOrUndefined(flags.chunkSize ?? Option.none()) !== undefined
+            ? { keysPerChunk: Option.getOrUndefined(flags.chunkSize ?? Option.none())! }
+            : effective.chunking.keysPerChunk !== undefined
+              ? { keysPerChunk: effective.chunking.keysPerChunk }
+              : {}),
         });
         for (const keys of chunks) {
           allChunks.push({
@@ -145,6 +151,9 @@ export function runBenchmarkCommand(
       totalDurationMs: s.totalDurationMs,
       averageDurationMsPerChunk: s.averageDurationMsPerChunk,
       totalAttempts: s.totalAttempts,
+      totalPromptTokens: s.totalPromptTokens,
+      totalCompletionTokens: s.totalCompletionTokens,
+      estimatedCostUsd: s.estimatedCostUsd,
     }));
 
     yield* deps.logger(formatBenchmark(entries, format));
@@ -158,6 +167,7 @@ export const benchmarkCommand = Command.make(
     adapter: Options.optional(Options.text("adapter")),
     strategies: Options.optional(Options.text("strategies")),
     sampleSize: Options.optional(Options.integer("sample-size")),
+    chunkSize: Options.optional(Options.integer("chunk-size")),
     format: Options.optional(Options.text("format")),
   },
   (flags) =>

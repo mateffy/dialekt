@@ -3,14 +3,22 @@ import { Effect, Console, Option } from "effect";
 import { loadConfig } from "../../config/load-config.js";
 import { resolveEffectiveConfig } from "../config-resolution.js";
 import { resolveModel } from "../../translation/model-registry.js";
-import { createOneShotStrategy } from "../../translation/one-shot-strategy.js";
+import { createOneShotStrategy, type ChunkTrace } from "../../translation/one-shot-strategy.js";
 import { createToolLoopStrategy } from "../../translation/tool-loop-strategy.js";
-import { runTranslation } from "../../translation/orchestrator.js";
+import { runTranslation, type TranslationProgressEvent } from "../../translation/orchestrator.js";
 import { detectFormat, type OutputFormat } from "../format.js";
 import { formatTranslate, formatError } from "../formatters.js";
+import { ProgressDisplay, StatusBar } from "../progress.js";
 import type { DialektConfig } from "../../config/types.js";
-import type { TranslationStrategy } from "../../translation/types.js";
 import type { TranslationRunConfig } from "../../translation/orchestrator.js";
+import type { LanguageModel } from "ai";
+
+const D = "\x1b[2m";
+const G = "\x1b[32m";
+const C = "\x1b[36m";
+const Y = "\x1b[33m";
+const B = "\x1b[1m";
+const W = "\x1b[0m";
 
 export interface TranslateFlags {
   readonly config: string;
@@ -22,8 +30,52 @@ export interface TranslateFlags {
   readonly skipNames: boolean;
   readonly skipLanguages: boolean;
   readonly fast: boolean;
+  readonly quiet?: boolean;
   readonly format?: Option.Option<string>;
 }
+
+function shouldShowProgress(flags: TranslateFlags): boolean {
+  if (!process.stdout.isTTY) return false;
+  if (!flags.quiet) return false;
+  const fmt = flags.format !== undefined ? Option.getOrUndefined(flags.format) : undefined;
+  if (fmt === "json") return false;
+  return true;
+}
+
+function emitChunk(trace: ChunkTrace, chunkNum: number, total: number, bar: StatusBar): void {
+  const { sourceLocale, targetLocale, resource, keys, sourceTexts, output } = trace;
+  const counter = `${G}${chunkNum}/${total}${W}`;
+  const locPair = `${Y}${sourceLocale}${W} ${D}→${W} ${C}${targetLocale}${W}`;
+  const res = resource ? `${D}${resource}${W}  ` : "";
+  const lines: string[] = [];
+  lines.push(`\n${D}┌${W} ${res}${B}${keys.length} keys${W}  ${locPair}  ${D}[${W}${counter}${D}]${W}`);
+  lines.push(`${D}│${W}`);
+  for (const key of keys) {
+    const src = sourceTexts[key] ?? "";
+    const tgt = output[key] ?? D + "(missing)" + W;
+    lines.push(`${D}│${W} ${C}${key}${W}`);
+    lines.push(`${D}│${W}  ${D}de${W}  ${src.slice(0, 140)}`);
+    lines.push(`${D}│${W}  ${G}${targetLocale}${W}  ${tgt.slice(0, 140)}`);
+    lines.push(`${D}│${W}`);
+  }
+  lines.push(`${D}└${W}`);
+  bar.beforeOutput();
+  process.stderr.write(lines.join("\n") + "\n\n");
+  bar.afterOutput();
+}
+
+/** Per-chunk aggregates collected during translation. */
+interface ChunkStats {
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalDurationMs: number;
+  chunkCount: number;
+  minDurationMs: number;
+  maxDurationMs: number;
+}
+
+const DEEPSEEK_INPUT_PER_1M = 0.40;
+const DEEPSEEK_OUTPUT_PER_1M = 0.60;
 
 export function runTranslate(
   flags: TranslateFlags,
@@ -32,7 +84,13 @@ export function runTranslate(
     provider: string;
     modelId: string;
   }) => Effect.Effect<unknown, unknown> = resolveModel,
-  translationRunner: (opts: TranslationRunConfig) => Effect.Effect<void, unknown> = runTranslation,
+  translationRunner: (
+    opts: TranslationRunConfig,
+    onProgress?: (event: TranslationProgressEvent) => void,
+  ) => Effect.Effect<void, unknown> = runTranslation as (
+    opts: TranslationRunConfig,
+    onProgress?: (event: TranslationProgressEvent) => void,
+  ) => Effect.Effect<void, unknown>,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
 ): Effect.Effect<void, unknown> {
   return Effect.gen(function* () {
@@ -52,23 +110,130 @@ export function runTranslate(
     );
 
     const modelConfig = flags.fast ? effective.fastModel : effective.model;
-    const model = yield* modelResolver(modelConfig) as Effect.Effect<
-      import("ai").LanguageModel,
-      unknown
-    >;
+    const model = yield* modelResolver(modelConfig) as Effect.Effect<LanguageModel, unknown>;
 
-    const translationStrategy =
+    // ── Status bar (default) or progress table (--quiet) ──
+    const showProgress = shouldShowProgress(flags);
+    const showStatus = !flags.quiet && process.stdout.isTTY;
+    let bar: StatusBar | null = null;
+    let display: ProgressDisplay | null = null;
+
+    if (showStatus) {
+      bar = new StatusBar();
+      bar.start();
+    } else if (showProgress) {
+      const rows: Array<{ locale: string; resources: number }> = [];
+      for (const a of effective.adapters) {
+        const allLocales: readonly string[] = yield* a.listLocales();
+        const sourceLocale = effective.sourceLocale;
+        const targets = (effective.targetLocales && effective.targetLocales.length > 0
+          ? effective.targetLocales.filter((l: string) => l !== sourceLocale)
+          : allLocales.filter((l: string) => l !== sourceLocale)
+        );
+        for (const loc of targets) {
+          const resources = yield* a.listResources(sourceLocale);
+          rows.push({ locale: loc, resources: resources.length });
+        }
+      }
+      if (rows.length > 0) {
+        display = new ProgressDisplay(rows);
+        display.start();
+      }
+    }
+
+    // ── Shared trace / progress tracking ──
+    const chunkIdx = new Map<string, number>();
+    const chunkTot = new Map<string, number>();
+    const perLocaleTotal = new Map<string, number>();
+    const perLocaleDone = new Map<string, number>();
+    const cstats: ChunkStats = {
+      totalPromptTokens: 0, totalCompletionTokens: 0, totalDurationMs: 0,
+      chunkCount: 0, minDurationMs: Infinity, maxDurationMs: 0,
+    };
+
+    let translatedKeys = 0;
+
+    const onTrace = !flags.quiet
+      ? (trace: ChunkTrace) => {
+          const locale = trace.targetLocale;
+          perLocaleDone.set(locale, (perLocaleDone.get(locale) ?? 0) + trace.keys.length);
+          const idx = (chunkIdx.get(locale) ?? 0) + 1;
+          chunkIdx.set(locale, idx);
+          const tot = chunkTot.get(locale) ?? 0;
+
+          cstats.totalPromptTokens += trace.promptTokens;
+          cstats.totalCompletionTokens += trace.completionTokens;
+          cstats.totalDurationMs += trace.durationMs;
+          cstats.chunkCount++;
+          cstats.minDurationMs = Math.min(cstats.minDurationMs, trace.durationMs);
+          cstats.maxDurationMs = Math.max(cstats.maxDurationMs, trace.durationMs);
+
+          if (bar) {
+            emitChunk(trace, idx, tot, bar);
+          } else {
+            const { sourceLocale: sl, targetLocale: tl, resource, keys, sourceTexts, output } = trace;
+            const out = process.stderr;
+            out.write(`\n${D}┌${W} ${resource ? D + resource + W + "  " : ""}${B}${keys.length} keys${W}  ${Y}${sl}${W} ${D}→${W} ${C}${tl}${W}\n${D}│${W}\n`);
+            for (const key of keys) {
+              if (!output[key] && !sourceTexts[key]) continue;
+              out.write(`${D}│${W} ${C}${key}${W}\n`);
+              out.write(`${D}│${W}  ${D}de${W}  ${(sourceTexts[key] ?? "").slice(0, 140)}\n`);
+              out.write(`${D}│${W}  ${G}${tl}${W}  ${(output[key] ?? D + "(missing)" + W).slice(0, 140)}\n`);
+              out.write(`${D}│${W}\n`);
+            }
+            out.write(`${D}└${W}\n`);
+          }
+        }
+      : undefined;
+
+    const strategy =
       effective.strategy === "tool-loop-agent"
-        ? createToolLoopStrategy({ model, retry: effective.retry })
-        : createOneShotStrategy({ model, retry: effective.retry });
+        ? createToolLoopStrategy({ model, retry: effective.retry, ...(onTrace ? { onTrace } : {}) })
+        : createOneShotStrategy({ model, retry: effective.retry, ...(onTrace ? { onTrace } : {}) });
 
-    yield* translationRunner({
-      adapters: effective.adapters,
-      strategy: translationStrategy,
-      sourceLocale: effective.sourceLocale,
-      targetLocales: effective.targetLocales ?? [],
-      chunking: effective.chunking,
-    });
+    yield* translationRunner(
+      {
+        adapters: effective.adapters,
+        strategy,
+        sourceLocale: effective.sourceLocale,
+        targetLocales: effective.targetLocales ?? [],
+        chunking: effective.chunking,
+        resourceFilter: Option.getOrUndefined(flags.name),
+      },
+      (event) => {
+        switch (event.type) {
+          case "locale-start": display?.localeStarted(event.locale); break;
+          case "locale-scanned":
+            display?.localeScanned(event.locale, event.missingKeys ?? 0, event.chunksTotal ?? 0);
+            translatedKeys += event.missingKeys ?? 0;
+            chunkTot.set(event.locale, event.chunksTotal ?? 0);
+            perLocaleTotal.set(event.locale, (perLocaleTotal.get(event.locale) ?? 0) + (event.missingKeys ?? 0));
+            break;
+          case "chunk-start":
+            if (bar && event.resource) bar.setSlot(event.locale, event.resource, "⏳");
+            break;
+          case "chunk-complete":
+            display?.chunkComplete(event.locale);
+            if (bar && event.resource) bar.clearSlot(event.locale);
+            break;
+          case "chunk-fail":
+            display?.chunkFailed(event.locale);
+            if (bar && event.resource) bar.clearSlot(event.locale);
+            break;
+          case "locale-done":
+            display?.localeDone(event.locale);
+            bar?.clearSlot(event.locale);
+            break;
+          case "locale-error":
+            display?.localeError(event.locale);
+            bar?.clearSlot(event.locale);
+            break;
+        }
+      },
+    );
+
+    if (bar) bar.finish();
+    if (display) display.finish();
 
     const format = detectFormat(
       flags.format !== undefined
@@ -76,15 +241,51 @@ export function runTranslate(
         : undefined,
     );
 
+    const targetCount =
+      effective.targetLocales && effective.targetLocales.length > 0
+        ? effective.targetLocales.filter((l: string) => l !== effective.sourceLocale).length
+        : 0;
+
+    const msg =
+      translatedKeys === 0
+        ? "All translations are already complete — nothing to translate."
+        : "Translation complete.";
+
+    // Per-locale
+    const perLocale: Record<string, { translated: number; remaining: number }> = {};
+    let totalSource = 0;
+    for (const [loc, tot] of perLocaleTotal) {
+      totalSource += tot;
+      perLocale[loc] = { translated: perLocaleDone.get(loc) ?? 0, remaining: Math.max(0, tot - (perLocaleDone.get(loc) ?? 0)) };
+    }
+
+    // Chunk-level cost stats
+    const avgDuration = cstats.chunkCount > 0 ? cstats.totalDurationMs / cstats.chunkCount : 0;
+    const costUsd =
+      (cstats.totalPromptTokens / 1_000_000) * DEEPSEEK_INPUT_PER_1M +
+      (cstats.totalCompletionTokens / 1_000_000) * DEEPSEEK_OUTPUT_PER_1M;
+
+    const chunkStats = cstats.chunkCount > 0 ? {
+      chunkCount: cstats.chunkCount,
+      avgDurationMs: Math.round(avgDuration),
+      minDurationMs: cstats.minDurationMs === Infinity ? 0 : cstats.minDurationMs,
+      maxDurationMs: cstats.maxDurationMs,
+      totalPromptTokens: cstats.totalPromptTokens,
+      totalCompletionTokens: cstats.totalCompletionTokens,
+      estimatedCostUsd: Math.round(costUsd * 10000) / 10000,
+    } : undefined;
+
     yield* logger(
       formatTranslate(
         {
-          success: true,
-          message: "Translation complete.",
+          success: true, message: msg,
           stats: {
             adaptersProcessed: effective.adapters.length,
-            localesTranslated: (effective.targetLocales ?? []).length,
-            keysTranslated: 0, // TODO: track from orchestrator
+            localesTranslated: targetCount,
+            keysTranslated: translatedKeys,
+            ...(totalSource > 0 ? { totalSourceKeys: totalSource } : {}),
+            ...(Object.keys(perLocale).length > 0 ? { perLocale } : {}),
+            ...(chunkStats ? { chunkStats } : {}),
           },
         },
         format,
@@ -105,6 +306,7 @@ export const translateCommand = Command.make(
     skipNames: Options.boolean("skip-names"),
     skipLanguages: Options.boolean("skip-languages"),
     fast: Options.boolean("fast"),
+    quiet: Options.boolean("quiet"),
     format: Options.optional(Options.text("format")),
   },
   (flags) => runTranslate(flags),

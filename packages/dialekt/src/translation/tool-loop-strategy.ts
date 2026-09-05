@@ -5,10 +5,12 @@ import type { LanguageModel } from "ai";
 import type { TranslationContext, TranslationStrategy } from "./types.js";
 import { TranslationFailedError } from "./types.js";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt.js";
+import type { ChunkTrace } from "./one-shot-strategy.js";
 
 function tryTranslateChunk(
   model: LanguageModel,
   ctx: TranslationContext,
+  onTrace?: (trace: ChunkTrace) => void,
 ): Effect.Effect<Record<string, string>, Error> {
   return Effect.gen(function* () {
     const schema = z.object(Object.fromEntries(ctx.keys.map((key: string) => [key, z.string()])));
@@ -34,28 +36,44 @@ function tryTranslateChunk(
 
     yield* Effect.tryPromise({
       try: () => agent.generate({ prompt: buildUserPrompt(ctx) }),
-      catch: (cause) => cause,
+      catch: (cause) => new Error(String(cause)),
     });
 
     if (captured === null) {
       return yield* Effect.fail(new Error("Agent finished without calling submitTranslations"));
     }
-    const missing = ctx.keys.filter((key: string) => !(key in captured));
+    const result: Record<string, string> = captured;
+
+    onTrace?.(({
+      sourceLocale: ctx.sourceLocale,
+      targetLocale: ctx.targetLocale,
+      keys: ctx.keys,
+      sourceTexts: ctx.sourceMap,
+      text: "",
+      output: result,
+      durationMs: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      ...(ctx.resource !== undefined ? { resource: ctx.resource } : {}),
+    }) satisfies ChunkTrace);
+
+    const missing = ctx.keys.filter((key: string) => !(key in result));
     if (missing.length > 0) {
       return yield* Effect.fail(new Error(`Model omitted keys: ${missing.join(", ")}`));
     }
-    return captured;
+    return result;
   });
 }
 
 export function createToolLoopStrategy(deps: {
   model: LanguageModel;
   retry: { maxAttempts: number; baseDelayMs: number };
+  onTrace?: (trace: ChunkTrace) => void;
 }): TranslationStrategy {
   return {
     name: "tool-loop-agent",
     translateChunk: (ctx: TranslationContext) =>
-      tryTranslateChunk(deps.model, ctx).pipe(
+      tryTranslateChunk(deps.model, ctx, deps.onTrace).pipe(
         Effect.retry(
           Schedule.exponential(`${deps.retry.baseDelayMs} millis`).pipe(
             Schedule.compose(Schedule.recurs(deps.retry.maxAttempts - 1)),

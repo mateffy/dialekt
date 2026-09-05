@@ -1,7 +1,9 @@
 {
   "name": "@dialekt/adapter-laravel",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",

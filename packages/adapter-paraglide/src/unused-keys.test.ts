@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
 import { NodePlatformLayer } from "dialekt";
+import type { AdapterReadError } from "dialekt";
 import { findUnusedParaglideKeys } from "./unused-keys.js";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ describe("findUnusedParaglideKeys", () => {
 
     const program = findUnusedParaglideKeys([join(dir, "src")], ["greeting", "farewell"]).pipe(
       Effect.provide(NodePlatformLayer),
-    );
+    ) as unknown as Effect.Effect<string[], AdapterReadError, never>;
     const result = await Effect.runPromise(program);
     expect(result).toEqual(["farewell"]);
 
@@ -28,7 +29,7 @@ describe("findUnusedParaglideKeys", () => {
 
     const program = findUnusedParaglideKeys([join(dir, "src")], ["greeting"]).pipe(
       Effect.provide(NodePlatformLayer),
-    );
+    ) as unknown as Effect.Effect<string[], AdapterReadError, never>;
     const result = await Effect.runPromise(program);
     expect(result).toEqual([]);
 
@@ -42,7 +43,7 @@ describe("findUnusedParaglideKeys", () => {
 
     const program = findUnusedParaglideKeys([join(dir, "src")], ["greet", "greeting"]).pipe(
       Effect.provide(NodePlatformLayer),
-    );
+    ) as unknown as Effect.Effect<string[], AdapterReadError, never>;
     const result = await Effect.runPromise(program);
     expect(result).toEqual(["greet"]);
 

@@ -9,6 +9,8 @@ export interface ChunkingConfig {
   readonly maxTokens: number;
   readonly charsPerToken: number;
   readonly concurrency: number;
+  /** When set, each chunk gets at most this many keys (overrides token estimation). */
+  readonly keysPerChunk?: number;
 }
 
 export interface RetryConfig {
@@ -25,4 +27,6 @@ export interface DialektConfig {
   readonly chunking: ChunkingConfig;
   readonly retry: RetryConfig;
   readonly adapters: readonly TranslationAdapter[];
+  /** Explicit list of .env files to load before running commands. */
+  readonly env?: readonly string[];
 }

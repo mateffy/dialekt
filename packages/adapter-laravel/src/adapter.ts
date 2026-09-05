@@ -1,6 +1,8 @@
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
+import { FileSystem } from "@effect/platform";
 import { Path } from "@effect/platform/Path";
 import type { ResourceRef, TranslationAdapter, AdapterReadError, AdapterWriteError } from "dialekt";
+import type { CommandExecutor } from "@effect/platform/CommandExecutor";
 import {
   AdapterReadError as AdapterReadErrorClass,
   AdapterWriteError as AdapterWriteErrorClass,
@@ -8,6 +10,7 @@ import {
   flattenObject,
   unflattenObject,
   readPhpArrayAsJson,
+  readPhpArraysBatch,
   readFileIfExists,
   writeFileEnsuringDir,
 } from "dialekt";
@@ -43,7 +46,11 @@ function readLaravelResource(
   langDir: string,
   locale: string,
   resource: ResourceRef,
-): Effect.Effect<Record<string, string>, AdapterReadError, Path.Path> {
+): Effect.Effect<
+  Record<string, string>,
+  AdapterReadError,
+  FileSystem.FileSystem | Path | CommandExecutor
+> {
   return Effect.gen(function* () {
     const path = yield* Path;
 
@@ -68,12 +75,80 @@ function readLaravelResource(
   });
 }
 
+/**
+ * Returns a locale-scoped reader that batches all PHP-file reads for a locale
+ * into a single PHP process invocation. Subsequent reads hit the in-memory cache.
+ */
+function makeBatchedReader(langDir: string) {
+  // cache keyed by locale
+  const caches = new Map<string, Ref.Ref<Record<string, Record<string, unknown>> | null>>();
+
+  return (
+    locale: string,
+    resource: ResourceRef,
+  ): Effect.Effect<
+    Record<string, string>,
+    AdapterReadError,
+    FileSystem.FileSystem | Path | CommandExecutor
+  > =>
+    Effect.gen(function* () {
+      const path = yield* Path;
+
+      if (resource.key === "json") {
+        const filePath = path.join(langDir, `${locale}.json`);
+        const content = yield* readFileIfExists(filePath).pipe(
+          Effect.mapError((cause) => readError(locale, resource.key, cause)),
+        );
+        if (content === null) return {};
+        return yield* Effect.try({
+          try: () => JSON.parse(content) as Record<string, string>,
+          catch: (cause) => readError(locale, resource.key, cause),
+        });
+      }
+
+      // Ensure we have a cache ref for this locale.
+      if (!caches.has(locale)) {
+        caches.set(locale, yield* Ref.make<Record<string, Record<string, unknown>> | null>(null));
+      }
+      const cacheRef = caches.get(locale)!;
+
+      // Check cache.
+      const cached = yield* Ref.get(cacheRef);
+      if (cached !== null && resource.key in cached) {
+        return flattenObject(cached[resource.key]!);
+      }
+
+      // Not cached — batch-read ALL PHP resources for this locale.
+      const resources = yield* listLaravelResources(langDir, locale);
+      const phpResources = resources.filter((r) => r.key !== "json");
+      const absolutePaths = phpResources.map((r) => path.join(langDir, locale, `${r.key}.php`));
+
+      const batchResult: Record<string, Record<string, unknown>> =
+        absolutePaths.length > 0
+          ? yield* readPhpArraysBatch(absolutePaths).pipe(
+              Effect.catchTag("PhpExecutionError", () => Effect.succeed({} as Record<string, Record<string, unknown>>)),
+              Effect.mapError((cause) => readError(locale, resource.key, cause)),
+            )
+          : {};
+
+      // Build a keyed-by-resource map.
+      const byKey: Record<string, Record<string, unknown>> = {};
+      for (const r of phpResources) {
+        const fp = path.join(langDir, locale, `${r.key}.php`);
+        byKey[r.key] = batchResult[fp] ?? {};
+      }
+      yield* Ref.set(cacheRef, byKey);
+
+      return flattenObject(byKey[resource.key] ?? {});
+    });
+}
+
 function writeLaravelResource(
   langDir: string,
   locale: string,
   resource: ResourceRef,
   entries: Record<string, string>,
-): Effect.Effect<void, AdapterWriteError, Path.Path> {
+): Effect.Effect<void, AdapterWriteError, FileSystem.FileSystem | Path> {
   return Effect.gen(function* () {
     const path = yield* Path;
 
@@ -98,7 +173,11 @@ function findUnusedLaravelAdapterKeys(
   scanPaths: readonly string[],
   locale: string,
   resource: ResourceRef,
-): Effect.Effect<readonly string[], AdapterReadError, Path.Path> {
+): Effect.Effect<
+  readonly string[],
+  AdapterReadError,
+  FileSystem.FileSystem | Path | CommandExecutor
+> {
   return Effect.gen(function* () {
     const path = yield* Path;
     const adapterScanPaths = scanPaths.length > 0 ? scanPaths : [path.resolve(langDir, "..")];
@@ -110,6 +189,7 @@ function findUnusedLaravelAdapterKeys(
 
 export function laravel(options: LaravelAdapterOptions): TranslationAdapter {
   const { langDir, scanPaths = [] } = options;
+  const batchedRead = makeBatchedReader(langDir);
 
   return {
     name: "laravel",
@@ -124,7 +204,7 @@ export function laravel(options: LaravelAdapterOptions): TranslationAdapter {
       listLaravelResources(langDir, locale).pipe(Effect.provide(NodePlatformLayer)),
 
     readResource: (locale, resource) =>
-      readLaravelResource(langDir, locale, resource).pipe(
+      batchedRead(locale, resource).pipe(
         Effect.provide([NodePlatformLayer]),
       ) as Effect.Effect<Record<string, string>, AdapterReadError, never>,
 

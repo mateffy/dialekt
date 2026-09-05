@@ -22,19 +22,28 @@ function makeFsLayer(files: Record<string, string>) {
 describe("readFileIfExists", () => {
   it("returns content when file exists", async () => {
     const files = { "/a/b.txt": "hello" };
-    const program = readFileIfExists("/a/b.txt").pipe(Effect.provide(makeFsLayer(files)));
+    const program = readFileIfExists("/a/b.txt").pipe(
+      Effect.provide(makeFsLayer(files)),
+      Effect.provide(Path.layer),
+    );
     const result = await Effect.runPromise(program);
     expect(result).toBe("hello");
   });
 
   it("returns null when file does not exist", async () => {
-    const program = readFileIfExists("/a/missing.txt").pipe(Effect.provide(makeFsLayer({})));
+    const program = readFileIfExists("/a/missing.txt").pipe(
+      Effect.provide(makeFsLayer({})),
+      Effect.provide(Path.layer),
+    );
     const result = await Effect.runPromise(program);
     expect(result).toBeNull();
   });
 
   it("returns null for empty file system", async () => {
-    const program = readFileIfExists("/any/path.txt").pipe(Effect.provide(makeFsLayer({})));
+    const program = readFileIfExists("/any/path.txt").pipe(
+      Effect.provide(makeFsLayer({})),
+      Effect.provide(Path.layer),
+    );
     const result = await Effect.runPromise(program);
     expect(result).toBeNull();
   });
@@ -43,6 +52,7 @@ describe("readFileIfExists", () => {
     const files = { "/very/deep/nested/file.txt": "deep content" };
     const program = readFileIfExists("/very/deep/nested/file.txt").pipe(
       Effect.provide(makeFsLayer(files)),
+      Effect.provide(Path.layer),
     );
     const result = await Effect.runPromise(program);
     expect(result).toBe("deep content");
@@ -50,14 +60,20 @@ describe("readFileIfExists", () => {
 
   it("handles unicode content", async () => {
     const files = { "/unicode.txt": "Héllo 🌍 — 日本語" };
-    const program = readFileIfExists("/unicode.txt").pipe(Effect.provide(makeFsLayer(files)));
+    const program = readFileIfExists("/unicode.txt").pipe(
+      Effect.provide(makeFsLayer(files)),
+      Effect.provide(Path.layer),
+    );
     const result = await Effect.runPromise(program);
     expect(result).toBe("Héllo 🌍 — 日本語");
   });
 
   it("handles empty string content", async () => {
     const files = { "/empty.txt": "" };
-    const program = readFileIfExists("/empty.txt").pipe(Effect.provide(makeFsLayer(files)));
+    const program = readFileIfExists("/empty.txt").pipe(
+      Effect.provide(makeFsLayer(files)),
+      Effect.provide(Path.layer),
+    );
     const result = await Effect.runPromise(program);
     expect(result).toBe("");
   });

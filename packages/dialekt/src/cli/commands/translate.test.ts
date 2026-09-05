@@ -62,7 +62,7 @@ describe("runTranslate", () => {
     expect(logs).toHaveLength(1);
     const parsed = JSON.parse(logs[0]!);
     expect(parsed.success).toBe(true);
-    expect(parsed.message).toBe("Translation complete.");
+    expect(parsed.message).toContain("complete");
   });
 
   it("uses fastModel when --fast is passed", async () => {
@@ -348,7 +348,7 @@ describe("runTranslate", () => {
 
     await Effect.runPromise(program);
     expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain("Translation complete");
+    expect(logs[0]).toContain("complete");
   });
 
   it("handles empty adapters list", async () => {

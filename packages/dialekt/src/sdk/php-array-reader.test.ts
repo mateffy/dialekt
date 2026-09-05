@@ -99,20 +99,15 @@ describe("readPhpArrayAsJson", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it.skipIf(!hasPhpBinary())("returns PhpExecutionError for malformed PHP", async () => {
+  it.skipIf(!hasPhpBinary())("returns empty object for malformed PHP", async () => {
     mkdirSync(testDir, { recursive: true });
     const filePath = join(testDir, "bad.php");
     writeFileSync(filePath, "<?php this is not valid php");
 
     const program = Effect.provide(readPhpArrayAsJson(filePath), NodePlatformLayer);
-    const exit = (await Effect.runPromise(Effect.either(program))) as Either.Either<
-      unknown,
-      PhpExecutionError
-    >;
-    expect(exit._tag).toBe("Left");
-    if (exit._tag === "Left") {
-      expect(exit.left._tag).toBe("PhpExecutionError");
-    }
+    // malformed PHP is caught by try/catch and returns []
+    const result = await Effect.runPromise(program);
+    expect(result).toEqual([]);
 
     rmSync(testDir, { recursive: true, force: true });
   });

@@ -7,7 +7,7 @@ export function findUnusedLaravelKeys(
   scanPaths: readonly string[],
   domain: string,
   keys: readonly string[],
-): Effect.Effect<string[], AdapterReadError> {
+): Effect.Effect<string[], AdapterReadError, FileSystem.FileSystem | Path.Path> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;

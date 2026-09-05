@@ -23,6 +23,14 @@ export function resolveModel(
           const { openai } = await import("@ai-sdk/openai");
           return openai(config.modelId);
         }
+        case "openrouter": {
+          const { createOpenAI } = await import("@ai-sdk/openai");
+          const openrouter = createOpenAI({
+            baseURL: "https://openrouter.ai/api/v1",
+            apiKey: process.env.OPENROUTER_API_KEY ?? "",
+          });
+          return openrouter(config.modelId);
+        }
         case "anthropic": {
           const { anthropic } = await import("@ai-sdk/anthropic");
           return anthropic(config.modelId);

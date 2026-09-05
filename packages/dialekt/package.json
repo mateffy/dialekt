@@ -1,10 +1,12 @@
 {
   "name": "dialekt",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "bin": {
     "dialekt": "./dist/cli/main.mjs"
   },
   "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -24,7 +26,6 @@
     "@effect/platform": "^0.96.0",
     "@effect/platform-node": "^0.107.0",
     "ai": "^7.0.0",
-    "dialekt": "link:",
     "effect": "^3.21.0",
     "jiti": "^2.7.0",
     "zod": "^3.24.0"

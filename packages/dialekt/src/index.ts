@@ -3,10 +3,13 @@ export type { DialektConfig, ModelConfig, ChunkingConfig, RetryConfig } from "./
 export type { ResourceRef, TranslationAdapter, AdapterCapabilities } from "./adapter/types.js";
 export { AdapterReadError, AdapterWriteError } from "./adapter/types.js";
 export { flattenObject, unflattenObject, diffKeys } from "./keys/flatten.js";
+export { parseIcuMessage, extractIcuVariables, validateIcuPlural } from "./icu/index.js";
+export type { IcuMessage, IcuNode, IcuVariable, IcuPlural, IcuSelect } from "./icu/index.js";
+export { IcuParseError } from "./icu/index.js";
 export { chunkKeys } from "./translation/chunking.js";
 export { NodePlatformLayer } from "./sdk/node-layer.js";
 export { readFileIfExists, writeFileEnsuringDir } from "./sdk/file-io.js";
-export { readPhpArrayAsJson, PhpExecutionError } from "./sdk/php-array-reader.js";
+export { readPhpArrayAsJson, readPhpArraysBatch, PhpExecutionError } from "./sdk/php-array-reader.js";
 export { resolveModel, UnknownProviderError } from "./translation/model-registry.js";
 export type { TranslationContext, TranslationStrategy } from "./translation/types.js";
 export { TranslationFailedError } from "./translation/types.js";
