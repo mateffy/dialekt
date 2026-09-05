@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dialekt — an LLM CLI that translates your app's locale files</title>
+<meta name="description" content="dialekt is a command-line tool that finds missing keys in your locale files, sends them to a large language model, and writes the translations back in your framework's format. Supports Laravel, Paraglide, JSON, YAML, XLIFF, PO, Android, iOS, and more.">
+<link rel="canonical" href="https://dialekt.fabrik.computer/">
+<meta property="og:title" content="dialekt — an LLM CLI that translates your app's locale files">
+<meta property="og:description" content="Finds missing keys in your locale files, sends them to an LLM, and writes the translations back in your framework's format.">
+<meta property="og:type" content="website">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "dialekt",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Cross-platform",
+  "description": "A command-line tool that finds missing keys in locale files, sends them to a large language model, and writes the translations back in your framework's format.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "url": "https://github.com/mateffy/dialekt",
+  "license": "https://opensource.org/licenses/MIT"
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style type="text/tailwindcss">
+@theme {
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+</style>
+
+<style>
+  body {
+    background: #08090B;
+    color: #D6DBDF;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  ::selection { background: #4ADE80; color: #08090B; }
+
+  /* the terminal is the first screen; scrolling moves past it to the document */
+  #term {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .cursor-blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .pulse { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  .fill { animation: fillflash .7s ease-out; }
+  @keyframes fillflash { 0% { background: rgba(74,222,128,.25);} 100% { background: transparent; } }
+
+  /* the readable document sits below the fold as a real second screen */
+  #doc { border-top: 1px solid #1A1E23; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cursor-blink, .pulse { animation: none; }
+  }
+</style>
+</head>
+
+<body>
+
+<!-- ══ the terminal: fills the viewport, plays on its own, releases on scroll ══ -->
+<div id="term" class="bg-[#08090B]">
+  <div class="flex items-center gap-2 px-4 h-10 border-b border-[#1A1E23] shrink-0 text-[11px]">
+    <span class="w-2.5 h-2.5 rounded-full bg-[#2A2F35]"></span>
+    <span class="w-2.5 h-2.5 rounded-full bg-[#2A2F35]"></span>
+    <span class="w-2.5 h-2.5 rounded-full bg-[#2A2F35]"></span>
+    <a href="#top" class="ml-3 font-semibold text-[22px] leading-none tracking-tight text-[#D6DBDF] hover:text-[#4ADE80] transition-colors">dialekt<span class="text-[#4ADE80]">.</span></a>
+    <nav class="ml-auto flex items-center gap-5 text-[11px] text-[#6B7680]">
+      <a href="#how-it-works" class="hover:text-[#D6DBDF] transition-colors">how it works</a>
+      <a href="#commands" class="hover:text-[#D6DBDF] transition-colors">commands</a>
+      <a href="#frameworks" class="hover:text-[#D6DBDF] transition-colors">frameworks</a>
+      <a href="#get-started" class="hover:text-[#D6DBDF] transition-colors">get started</a>
+      <a href="https://github.com/mateffy/dialekt" class="hover:text-[#D6DBDF] transition-colors">github</a>
+      <span id="stack-badge" class="hidden">laravel</span>
+    </nav>
+  </div>
+  <div id="out" class="flex-1 overflow-hidden px-4 sm:px-8 py-4 text-[12.5px] sm:text-[13px] leading-[1.7] transition-opacity duration-300"></div>
+  <div class="shrink-0 border-t border-[#1A1E23] px-4 sm:px-8 h-10 flex items-center justify-between text-[10px] text-[#6B7680]">
+    <span>press 1 = laravel · 2 = paraglide · scroll for the readable version</span>
+    <div id="tabs" class="flex items-center gap-1"></div>
+  </div>
+</div>
+
+<!-- ══ the readable document: full content for crawlers and readers who scroll ══ -->
+<main id="doc" class="bg-[#08090B] text-[#D6DBDF] font-mono">
+  <div class="max-w-2xl mx-auto px-6 py-16 text-[14px] leading-[1.8]">
+
+    <h1 class="text-2xl font-semibold tracking-tight text-[#D6DBDF]">dialekt<span class="text-[#4ADE80]">.</span></h1>
+    <p class="mt-4 text-[#9AA3AB]">
+      dialekt is a command-line tool that translates application strings with a large language model.
+      It finds the keys that are missing from your target locale files, sends them to a model,
+      and writes the translations back in the file format that your framework uses.
+    </p>
+
+    <h2 id="how-it-works" class="mt-10 text-sm font-semibold text-[#4ADE80]">## what it does</h2>
+    <p class="mt-3 text-[#9AA3AB]">
+      When you add or edit a string in your source locale, the other locale files go out of sync.
+      dialekt diffs every target locale against your source, detects the missing keys,
+      and fills them with model-generated translations. It chunks large translation sets to stay
+      under token limits, retries a chunk when the model returns malformed output, and writes the
+      results back through an adapter for your framework. It does not touch keys that already exist.
+    </p>
+
+    <h2 id="commands" class="mt-10 text-sm font-semibold text-[#4ADE80]">## commands</h2>
+    <ul class="mt-3 space-y-2 text-[#9AA3AB] list-none">
+      <li><span class="text-[#4ADE80]">translate</span> — finds missing keys, chunks them, calls the model, and writes the results.</li>
+      <li><span class="text-[#4ADE80]">add</span> — inserts a new key in the source and translates it to every target locale.</li>
+      <li><span class="text-[#4ADE80]">missing</span> — lists every missing key without writing any files.</li>
+      <li><span class="text-[#4ADE80]">unused</span> — scans your source code and flags keys that nothing references.</li>
+      <li><span class="text-[#4ADE80]">validate</span> — exits with a non-zero code when any locale is missing keys, for CI.</li>
+      <li><span class="text-[#4ADE80]">languages</span> — prints the locales that each adapter detected.</li>
+      <li><span class="text-[#4ADE80]">benchmark</span> — runs the two translation strategies head-to-head with real API calls.</li>
+    </ul>
+
+    <h2 id="frameworks" class="mt-10 text-sm font-semibold text-[#4ADE80]">## frameworks</h2>
+    <p class="mt-3 text-[#9AA3AB]">
+      dialekt reads and writes your translation files through an adapter. Adapters exist for
+      Laravel (PHP array and JSON files), Paraglide (inlang message format), and plain JSON, YAML,
+      XLIFF, PO, Android, iOS, ARB, CSV, and properties files. You can write an adapter for another
+      framework by implementing one interface with four methods: listLocales, read, write, and findUsedKeys.
+    </p>
+
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">supported model providers</h3>
+    <p class="mt-2 text-[#9AA3AB]">
+      dialekt works with any provider the AI SDK supports. Set the provider's API key in your
+      environment, then reference the model in your config. The examples below show the three
+      most common setups.
+    </p>
+
+    <div class="mt-4 space-y-4">
+      <div>
+        <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
+          <span class="text-[#4ADE80]">openai</span><span>OPENAI_API_KEY</span>
+        </div>
+        <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model:     { provider: "openai", modelId: "gpt-4o" },
+fastModel: { provider: "openai", modelId: "gpt-4o-mini" },</pre>
+      </div>
+      <div>
+        <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
+          <span class="text-[#4ADE80]">anthropic</span><span>ANTHROPIC_API_KEY</span>
+        </div>
+        <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model:     { provider: "anthropic", modelId: "claude-opus-4" },
+fastModel: { provider: "anthropic", modelId: "claude-haiku-4" },</pre>
+      </div>
+      <div>
+        <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
+          <span class="text-[#4ADE80]">google</span><span>GOOGLE_GENERATIVE_AI_API_KEY</span>
+        </div>
+        <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model:     { provider: "google", modelId: "gemini-2.0-flash" },
+fastModel: { provider: "google", modelId: "gemini-2.0-flash-lite" },</pre>
+      </div>
+    </div>
+    <p class="mt-3 text-[#9AA3AB]">
+      Mix providers freely — <span class="text-[#D6DBDF]">model</span> and <span class="text-[#D6DBDF]">fastModel</span>
+      do not have to come from the same one.
+    </p>
+
+    <h2 id="get-started" class="mt-10 text-sm font-semibold text-[#4ADE80]">## get started</h2>
+
+    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">1. install</h3>
+    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npm install -D dialekt @dialekt/adapter-laravel</pre>
+
+    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">2. set an API key</h3>
+    <p class="mt-2 text-[#9AA3AB]">
+      dialekt talks to your model provider. Export the key for the provider you use.
+    </p>
+    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">export OPENAI_API_KEY=sk-...
+# or ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY</pre>
+
+    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">3. configure</h3>
+    <p class="mt-2 text-[#9AA3AB]">
+      Create <span class="text-[#D6DBDF]">dialekt.config.ts</span> in your project root and point an adapter at your locale files.
+    </p>
+    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">import { defineConfig } from "dialekt";
+import { laravel } from "@dialekt/adapter-laravel";
+
+export default defineConfig({
+  sourceLocale: "en",
+  targetLocales: ["de", "fr", "es"],
+  adapters: [
+    laravel({ langDir: "./lang", scanPaths: ["./app", "./resources/views"] }),
+  ],
+});</pre>
+
+    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">4. translate</h3>
+    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npx dialekt translate</pre>
+
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">use more than one model</h3>
+    <p class="mt-2 text-[#9AA3AB]">
+      You set two models in the config. <span class="text-[#D6DBDF]">model</span> is the default, higher-quality model.
+      <span class="text-[#D6DBDF]">fastModel</span> is a cheaper, faster model used when you pass
+      <span class="text-[#D6DBDF]">--fast</span>. You can mix providers: one model can be OpenAI and the other Anthropic.
+    </p>
+    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">export default defineConfig({
+  // ...
+  model:     { provider: "anthropic", modelId: "claude-opus-4" },
+  fastModel: { provider: "openai",    modelId: "gpt-4o-mini" },
+});</pre>
+    <p class="mt-2 text-[#9AA3AB]">
+      Run <span class="text-[#D6DBDF]">npx dialekt translate</span> for the default model, or
+      <span class="text-[#D6DBDF]">npx dialekt translate --fast</span> for the cheap one.
+      You can also run two different configs side by side by passing
+      <span class="text-[#D6DBDF]">--config path/to/other.config.ts</span> to any command.
+    </p>
+
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">write your own adapter</h3>
+    <p class="mt-2 text-[#9AA3AB]">
+      An adapter teaches dialekt how to read and write your framework's translation files.
+      Implement the <span class="text-[#D6DBDF]">TranslationAdapter</span> interface — four methods:
+    </p>
+    <ul class="mt-2 space-y-1.5 text-[#9AA3AB] list-none">
+      <li><span class="text-[#4ADE80]">listLocales()</span> — return the locale codes that the adapter finds on disk.</li>
+      <li><span class="text-[#4ADE80]">read(locale)</span> — return all keys and their strings for a locale.</li>
+      <li><span class="text-[#4ADE80]">write(locale, entries)</span> — write translated keys back to the locale's files.</li>
+      <li><span class="text-[#4ADE80]">findUsedKeys()</span> — scan source code and return the keys that are referenced.</li>
+    </ul>
+    <p class="mt-2 text-[#9AA3AB]">
+      dialekt handles the rest — the diffing, chunking, retries, and model calls.
+      The adapter only knows about files.
+    </p>
+    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">import type { TranslationAdapter } from "dialekt";
+
+export function myFramework(): TranslationAdapter {
+  return {
+    name: "my-framework",
+    async listLocales() {
+      // read your locale directory, return ["en", "de", ...]
+    },
+    async read(locale) {
+      // parse the locale's files, return a flat key → string map
+    },
+    async write(locale, entries) {
+      // write the translated keys back in your format
+    },
+    async findUsedKeys() {
+      // scan your source for translation calls, return the keys
+    },
+  };
+}</pre>
+    <p class="mt-2 text-[#9AA3AB]">
+      Register it in your config's <span class="text-[#D6DBDF]">adapters</span> array and dialekt treats it
+      like a first-party adapter. See
+      <span class="text-[#D6DBDF]">packages/adapter-laravel/src/adapter.ts</span> for a full reference.
+    </p>
+
+    <p class="mt-12 text-[#6B7680] text-[12px]">
+      dialekt · MIT license ·
+      <a href="https://github.com/mateffy/dialekt" class="text-[#4ADE80] underline underline-offset-4">github.com/mateffy/dialekt</a>
+    </p>
+  </div>
+</main>
+
+
+<script>
+/* ══════════════ data ══════════════ */
+const G  = s => `<span class="text-[#4ADE80]">${s}</span>`;
+const Y  = s => `<span class="text-[#FBBF24]">${s}</span>`;
+const C  = s => `<span class="text-[#67E8F9]">${s}</span>`;
+const R  = s => `<span class="text-[#F87171]">${s}</span>`;
+const D  = s => `<span class="text-[#6B7680]">${s}</span>`;
+const B  = s => `<span class="font-semibold text-[#D6DBDF]">${s}</span>`;
+const DM = s => `<span class="text-[#4A525A]">${s}</span>`;
+const PROMPT = `${G('➜')} ${C('~/my-app')}`;
+const SPINNER = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+
+/* ══════════════ stacks ══════════════ */
+const STACKS = {
+  laravel: {
+    label: 'laravel',
+    install: 'npm install -D dialekt @dialekt/adapter-laravel',
+    configFile: 'dialekt.config.ts',
+    config:
+`<span class="text-[#67E8F9]">import</span> { defineConfig } <span class="text-[#67E8F9]">from</span> <span class="text-[#FBBF24]">"dialekt"</span>;
+<span class="text-[#67E8F9]">import</span> { laravel } <span class="text-[#67E8F9]">from</span> <span class="text-[#FBBF24]">"@dialekt/adapter-laravel"</span>;
+
+<span class="text-[#67E8F9]">export default</span> <span class="text-[#67E8F9]">defineConfig</span>({
+  sourceLocale: <span class="text-[#FBBF24]">"en"</span>,
+  targetLocales: [<span class="text-[#FBBF24]">"de"</span>, <span class="text-[#FBBF24]">"fr"</span>, <span class="text-[#FBBF24]">"es"</span>],
+  adapters: [
+    laravel({
+      langDir: <span class="text-[#FBBF24]">"./lang"</span>,
+      scanPaths: [<span class="text-[#FBBF24]">"./app"</span>, <span class="text-[#FBBF24]">"./resources/views"</span>],
+    }),
+  ],
+});`,
+    usageFile: 'resources/views/nav.blade.php',
+    usage:
+`<span class="text-[#6B7680]">&lt;a</span> <span class="text-[#67E8F9]">href</span>=<span class="text-[#FBBF24]">"/login"</span><span class="text-[#6B7680]">&gt;</span>
+  {{ __(<span class="text-[#FBBF24]">'auth.login'</span>) }}
+<span class="text-[#6B7680]">&lt;/a&gt;</span>`,
+    usageNote: 'unused scans for __(), @lang(), trans()',
+    sourceFile: 'lang/en/auth.php',
+    targetFile: 'lang/de/auth.php',
+    fmt: 'php',
+    keys: [
+      { key: 'login',           en: 'Log in',                de: 'Anmelden',            missing: false },
+      { key: 'logout',          en: 'Log out',               de: 'Abmelden',            missing: false },
+      { key: 'forgot_password', en: 'Forgot your password?', de: 'Passwort vergessen?', missing: true  },
+      { key: 'remember_me',     en: 'Remember me',           de: 'Angemeldet bleiben',  missing: true  },
+      { key: 'confirm_password',en: 'Confirm password',      de: 'Passwort bestätigen', missing: true  },
+    ],
+  },
+  paraglide: {
+    label: 'paraglide',
+    install: 'npm install -D dialekt @dialekt/adapter-paraglide',
+    configFile: 'dialekt.config.ts',
+    config:
+`<span class="text-[#67E8F9]">import</span> { defineConfig } <span class="text-[#67E8F9]">from</span> <span class="text-[#FBBF24]">"dialekt"</span>;
+<span class="text-[#67E8F9]">import</span> { paraglide } <span class="text-[#67E8F9]">from</span> <span class="text-[#FBBF24]">"@dialekt/adapter-paraglide"</span>;
+
+<span class="text-[#67E8F9]">export default</span> <span class="text-[#67E8F9]">defineConfig</span>({
+  sourceLocale: <span class="text-[#FBBF24]">"en"</span>,
+  targetLocales: [<span class="text-[#FBBF24]">"de"</span>, <span class="text-[#FBBF24]">"fr"</span>, <span class="text-[#FBBF24]">"es"</span>],
+  adapters: [
+    paraglide({
+      messagesDir: <span class="text-[#FBBF24]">"./messages"</span>,
+      scanPaths: [<span class="text-[#FBBF24]">"./src"</span>],
+    }),
+  ],
+});`,
+    usageFile: 'src/routes/+page.svelte',
+    usage:
+`<span class="text-[#6B7680]">&lt;script&gt;</span>
+  <span class="text-[#67E8F9]">import</span> * <span class="text-[#67E8F9]">as</span> m <span class="text-[#67E8F9]">from</span> <span class="text-[#FBBF24]">"$lib/paraglide/messages"</span>;
+<span class="text-[#6B7680]">&lt;/script&gt;</span>
+
+<span class="text-[#6B7680]">&lt;h1&gt;</span>{m.welcome_back({ name })}<span class="text-[#6B7680]">&lt;/h1&gt;</span>`,
+    usageNote: 'unused scans for m.messageName(...)',
+    sourceFile: 'messages/en.json',
+    targetFile: 'messages/de.json',
+    fmt: 'json',
+    keys: [
+      { key: 'sign_in',            en: 'Sign in',           de: 'Anmelden',             missing: false },
+      { key: 'sign_out',           en: 'Sign out',          de: 'Abmelden',             missing: false },
+      { key: 'create_account',     en: 'Create an account', de: 'Konto erstellen',      missing: true  },
+      { key: 'save_button',        en: 'Save changes',      de: 'Änderungen speichern', missing: true  },
+      { key: 'search_placeholder', en: 'Search...',         de: 'Suchen...',            missing: true  },
+    ],
+  },
+};
+
+/* ══════════════ engine ══════════════ */
+const out = document.getElementById('out');
+const stackBadge = document.getElementById('stack-badge');
+
+let stackId = 'laravel';
+let cursorEl = null;
+
+/* a token that changes on every step switch; anything holding a stale token is dead */
+let runToken = 0;
+const alive = t => t === runToken;
+
+const line = (html = '') => {
+  const div = document.createElement('div');
+  div.innerHTML = html === '' ? '&nbsp;' : html;
+  div.className = 'whitespace-pre-wrap break-words';
+  out.appendChild(div);
+  trimTop();
+  return div;
+};
+const trimTop = () => {
+  /* keep the tail in view: drop leading blank lines when full */
+  while (out.scrollHeight > out.clientHeight + 40 && out.firstChild) {
+    out.removeChild(out.firstChild);
+  }
+  out.scrollTop = out.scrollHeight;
+};
+/* abortable sleep: resolves false if the run was switched mid-wait */
+const sleep = (ms, t = runToken) => new Promise(r => setTimeout(() => r(alive(t)), ms));
+const spin = () => SPINNER[Math.floor(Date.now() / 80) % SPINNER.length];
+
+function removeCursor() { if (cursorEl) { cursorEl.remove(); cursorEl = null; } }
+function placeCursor() {
+  removeCursor();
+  cursorEl = document.createElement('div');
+  cursorEl.innerHTML = `${PROMPT} <span class="cursor-blink text-[#4ADE80]">▊</span>`;
+  out.appendChild(cursorEl);
+  trimTop();
+}
+
+async function typeCmd(cmd, t) {
+  removeCursor();
+  const div = line();
+  for (let n = 0; n <= cmd.length; n++) {
+    div.innerHTML = `${PROMPT} ${cmd.slice(0, n)}<span class="cursor-blink text-[#4ADE80]">▊</span>`;
+    if (!await sleep(30 + Math.random() * 40, t)) return null;
+  }
+  div.innerHTML = `${PROMPT} ${cmd}`;
+  await sleep(300, t);
+  return div;
+}
+
+async function spinner(text, ms, t) {
+  const div = line(`${spin()} ${D(text)}`);
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    if (!await sleep(80, t)) return null;
+    div.innerHTML = `${spin()} ${D(text)}`;
+  }
+  return div;
+}
+
+function fileBlock(stack) {
+  /* source | target rendered as one block, returns updater */
+  const wrap = line();
+  wrap.className = 'my-2 rounded border border-[#1A1E23] bg-[#0C0E11] overflow-hidden whitespace-normal';
+  const rows = stack.keys.map(k => ({
+    k,
+    el: null,      // target row element
+    state: 'idle', // idle | scanning | active | filled
+  }));
+  const src = k => stack.fmt === 'php' ? `'${k.key}' => '${k.en}',` : `"${k.key}": "${k.en}",`;
+  const tgt = k => stack.fmt === 'php' ? `'${k.key}' => '${k.de}',` : `"${k.key}": "${k.de}",`;
+
+  function render() {
+    wrap.innerHTML = `
+      <div class="flex items-center gap-2 px-3 h-8 border-b border-[#1A1E23] text-[10px] text-[#6B7680]">
+        <span>${stack.sourceFile}</span>
+        <span class="text-[#3A4048]">→</span>
+        <span>${stack.targetFile}</span>
+        <span class="ml-auto">${stack.label}</span>
+      </div>
+      <div class="grid md:grid-cols-2">
+        <div class="p-3 border-b md:border-b-0 md:border-r border-[#1A1E23] text-[12px] leading-6">
+          ${stack.keys.map(k => `
+            <div class="px-1 rounded ${k.missing && rows.find(r=>r.k===k).state === 'scanning' ? 'bg-[rgba(248,113,113,.12)]' : ''}"
+                 style="transition:background .25s">
+              <span class="text-[#9AA3AB]">${src(k)}</span>
+            </div>`).join('')}
+        </div>
+        <div class="p-3 text-[12px] leading-6">
+          ${stack.keys.map((k, i) => {
+            const r = rows[i];
+            if (!k.missing) return `<div class="px-1 rounded text-[#9AA3AB]">${tgt(k)}</div>`;
+            if (r.state === 'filled') return `<div class="px-1 rounded fill text-[#4ADE80]">${tgt(k)} <span class="text-[11px]">✓</span></div>`;
+            if (r.state === 'active') return `<div class="px-1 rounded"><span class="text-[#D6DBDF]">${k.key}</span><span class="text-[#6B7680]">${stack.fmt==='php'?' =>':':'}</span> <span class="text-[#67E8F9] text-[11px]"><span data-sp>${spin()}</span> translating</span></div>`;
+            return `<div class="px-1 rounded ${r.state==='scanning'?'bg-[rgba(248,113,113,.12)]':''}" style="transition:background .25s"><span class="text-[#D6DBDF]">${k.key}</span><span class="text-[#6B7680]">${stack.fmt==='php'?' =>':':'}</span> <span class="text-[#F87171] text-[11px] border border-dashed border-[#F87171]/40 rounded px-1">missing</span></div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+  render();
+  return {
+    setState(key, state) { const r = rows.find(r => r.k.key === key); if (r) { r.state = state; render(); } },
+    startTicker(t) {
+      this._t = setInterval(() => {
+        if (!alive(t)) { clearInterval(this._t); return; }
+        const el = wrap.querySelector('[data-sp]');
+        if (el) el.textContent = spin();
+      }, 80);
+    },
+    stopTicker() { clearInterval(this._t); },
+  };
+}
+
+/* ══════════════ the scripted session ══════════════ */
+/* Each step takes the run token and bails the moment it goes stale. */
+const STEPS = [
+  /* 0 — intro + translate */
+  async (t) => {
+    line(D('# dialekt — an LLM CLI that writes your translations'));
+    line(D('# it diffs your locale files, sends the missing keys to a model,'));
+    line(D('# and writes the results back in your framework\'s format.'));
+    line();
+    if (!await sleep(700, t)) return;
+    if (!await typeCmd('npx dialekt translate', t)) return;
+    const sp = await spinner('scanning adapters…', 800, t);
+    if (!sp) return;
+    sp.innerHTML = `${G('✓')} ${B(stackId)} ${D('—')} 3 target locales ${D('(de, fr, es)')}`;
+
+    const stack = STACKS[stackId];
+    const fb = fileBlock(stack);
+    fb.startTicker(t);
+    if (!await sleep(500, t)) return;
+    for (const k of stack.keys) {
+      if (!k.missing) continue;
+      fb.setState(k.key, 'active');
+      if (!await sleep(900, t)) return;
+      fb.setState(k.key, 'filled');
+      if (!await sleep(200, t)) return;
+    }
+    fb.stopTicker();
+    line();
+    line(`${G('✓')} ${B('Translation complete.')} ${D('de 6 · fr 5 · es 3')}`);
+    placeCursor();
+  },
+
+  /* 1 — missing */
+  async (t) => {
+    line(D('# missing lists the gaps without writing anything.'));
+    if (!await sleep(500, t)) return;
+    if (!await typeCmd('npx dialekt missing', t)) return;
+    line();
+    line(`${B('Missing keys')} ${D('(6)')}`);
+    line(`  ${B(C(stackId))} ${D('(6)')}`);
+    line(`    ${Y('→ de')} ${D('(3)')}`);
+    line(`      ${D('•')} forgot_password`);
+    line(`      ${D('•')} remember_me`);
+    line(`      ${D('•')} confirm_password`);
+    line(`    ${Y('→ fr')} ${D('(2)')}`);
+    line(`      ${D('•')} forgot_password`);
+    line(`      ${D('•')} confirm_password`);
+    line(`    ${Y('→ es')} ${D('(1)')}`);
+    line(`      ${D('•')} forgot_password`);
+    placeCursor();
+  },
+
+  /* 2 — validate */
+  async (t) => {
+    line(D('# validate is your CI gate. it exits non-zero when any locale drifts.'));
+    if (!await sleep(500, t)) return;
+    if (!await typeCmd('npx dialekt validate', t)) return;
+    if (!await spinner('checking locales…', 700, t)) return;
+    line();
+    line(`${R('✗')} ${B('Missing keys found in 2 resource(s)')}`);
+    line();
+    line(D('  Adapter  Locale  Resource  Missing'));
+    line(`  ${stackId.padEnd(9)}  de      auth.php  ${Y('3')}`);
+    line(`  ${stackId.padEnd(9)}  fr      auth.php  ${Y('3')}`);
+    line();
+    if (!await typeCmd('echo $?', t)) return;
+    line(R('1'));
+    placeCursor();
+  },
+
+  /* 3 — stack config */
+  async (t) => {
+    line(D('# point one adapter at your files. everything else is defaults.'));
+    line(D(`# press 1 for laravel, 2 for paraglide.`));
+    if (!await sleep(600, t)) return;
+    if (!await typeCmd(`cat ${STACKS[stackId].configFile}`, t)) return;
+    line();
+    const cfg = line(STACKS[stackId].config);
+    cfg.classList.add('text-[13px]');
+    line();
+    line(D(`# in your code — ${STACKS[stackId].usageFile}:`));
+    const usg = line(STACKS[stackId].usage);
+    usg.classList.add('text-[13px]');
+    line();
+    line(D(`# and dialekt ${STACKS[stackId].usageNote}.`));
+    placeCursor();
+  },
+
+  /* 4 — the rest */
+  async (t) => {
+    line(D('# seven commands. that is the whole surface.'));
+    if (!await sleep(500, t)) return;
+    if (!await typeCmd('npx dialekt --help', t)) return;
+    line();
+    const rows = [
+      ['translate', 'find missing keys, chunk them, call the LLM, write the results'],
+      ['add',       'insert a key in the source and translate it to every locale'],
+      ['missing',   'list missing keys, write nothing'],
+      ['unused',    'flag keys that nothing references'],
+      ['validate',  'exit non-zero on drift, for CI'],
+      ['languages', 'print the locales each adapter detected'],
+      ['benchmark', 'run both strategies head-to-head'],
+    ];
+    for (const [cmd, desc] of rows) {
+      line(`  ${G(cmd.padEnd(11))} ${D(desc)}`);
+      if (!await sleep(90, t)) return;
+    }
+    line();
+    line(D('# every command accepts --format json, and switches to it when piped'));
+    line(D('# or run inside an AI agent.'));
+    placeCursor();
+  },
+
+  /* 5 — install */
+  async (t) => {
+    line(D('# get started.'));
+    if (!await sleep(500, t)) return;
+    const cmd = `npm install -D dialekt @dialekt/adapter-${stackId}`;
+    const typed = await typeCmd(cmd, t);
+    if (!typed) return;
+    typed.innerHTML = `${PROMPT} ${cmd} <button id="copybtn" class="ml-3 text-[10px] border border-[#1A1E23] rounded px-2 py-0.5 text-[#6B7680] hover:text-[#D6DBDF] pointer-events-auto">copy</button>`;
+    const btn = document.getElementById('copybtn');
+    if (btn) btn.onclick = () => { navigator.clipboard.writeText(cmd).catch(()=>{}); btn.textContent = 'copied'; setTimeout(()=>btn.textContent='copy', 1200); };
+    line();
+    line(`${G('✓')} ${D('done.')} ${D('diff → translate → write')}`);
+    line();
+    line(D('mit · github.com/mateffy/dialekt'));
+    placeCursor();
+  },
+];
+
+/* ══════════════ syntax highlighting for the readable doc ══════════════ */
+/* a tiny tokenizer: comments, strings, keywords, numbers, properties. enough for TS configs. */
+(function highlightDoc() {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rules = [
+    [/\/\/[^\n]*/g, m => `<span class="text-[#4A525A]">${m}</span>`],                 // comments
+    [/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, m => `<span class="text-[#FBBF24]">${m}</span>`], // strings
+    [/\b(import|export|from|default|const|let|var|async|await|function|return|new|type|interface)\b/g,
+      m => `<span class="text-[#67E8F9]">${m}</span>`],                                // keywords
+    [/\b\d+\b(?!\u0000)/g, m => `<span class="text-[#F87171]">${m}</span>`],              // numbers (not inside a placeholder)
+    [/\b([A-Za-z_$][\w$]*)(?=\s*:)/g, m => `<span class="text-[#9AA3AB]">${m}</span>`],  // object keys
+  ];
+  document.querySelectorAll('#doc pre').forEach(pre => {
+    /* skip blocks that already carry their own span markup */
+    if (pre.querySelector('span')) return;
+    let html = esc(pre.textContent);
+    /* placeholder-protect already-inserted spans so later rules don't recolor them */
+    const stash = [];
+    const apply = (re, wrap) => {
+      html = html.replace(re, m => { stash.push(wrap(m)); return `\u0000${stash.length - 1}\u0000`; });
+    };
+    for (const [re, wrap] of rules) apply(re, wrap);
+    html = html.replace(/\u0000(\d+)\u0000/g, (_, i) => stash[+i]);
+    pre.innerHTML = html;
+  });
+})();
+
+/* tabs + autonomous cycling: each step clears the screen and fades in */
+const STEP_NAMES = ['translate', 'missing', 'validate', 'stack', 'commands', 'install'];
+const totalSteps = STEPS.length;
+const tabsEl = document.getElementById('tabs');
+let currentStep = 0;
+
+STEP_NAMES.forEach((name, i) => {
+  const btn = document.createElement('button');
+  btn.textContent = name;
+  btn.className = 'px-2.5 py-1 rounded text-[#6B7680] hover:text-[#D6DBDF] transition-colors';
+  btn.onclick = () => playStep(i);
+  tabsEl.appendChild(btn);
+});
+const tabBtns = [...tabsEl.children];
+
+function markTab(i) {
+  tabBtns.forEach((b, j) => {
+    b.className = 'px-2.5 py-1 rounded transition-colors ' +
+      (j === i ? 'bg-[#4ADE80] text-[#08090B] font-semibold' : 'text-[#6B7680] hover:text-[#D6DBDF]');
+  });
+}
+
+async function playStep(i) {
+  currentStep = i;
+  const t = ++runToken;          /* kills every in-flight helper from the previous step */
+  markTab(i);
+  removeCursor();
+  out.style.opacity = '0';
+  await new Promise(r => setTimeout(r, 220));   /* fade out; not guarded on purpose */
+  if (t !== runToken) return;    /* switched again during the fade */
+  out.innerHTML = '';
+  out.style.opacity = '1';
+  await STEPS[i](t);
+  if (t !== runToken) return;
+  if (!await sleep(5000, t)) return;
+  if (t !== runToken) return;
+  playStep((i + 1) % totalSteps);
+}
+
+/* kick off */
+playStep(0);
+
+/* stack switch by key */
+window.addEventListener('keydown', (e) => {
+  if (e.key === '1') setStack('laravel');
+  if (e.key === '2') setStack('paraglide');
+});
+function setStack(id) {
+  if (!STACKS[id] || id === stackId) return;
+  stackId = id;
+  stackBadge.textContent = id;
+  playStep(currentStep);   /* restart the current step with the new stack */
+}
+
+</script>
+
+</body>
+</html>
