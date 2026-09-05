@@ -68,7 +68,7 @@
 </style>
 </head>
 
-<body>
+<body class="antialiased">
 
 <!-- ══ the terminal: fills the viewport, plays on its own, releases on scroll ══ -->
 <div id="term" class="bg-[#08090B]">
@@ -95,7 +95,7 @@
 
 <!-- ══ the readable document: full content for crawlers and readers who scroll ══ -->
 <main id="doc" class="bg-[#08090B] text-[#D6DBDF] font-mono">
-  <div class="max-w-2xl mx-auto px-6 py-16 text-[14px] leading-[1.8]">
+  <div class="max-w-2xl mx-auto px-6 py-20 text-[14px] leading-[1.9]">
 
     <h1 class="text-2xl font-semibold tracking-tight text-[#D6DBDF]">dialekt<span class="text-[#4ADE80]">.</span></h1>
     <p class="mt-4 text-[#9AA3AB]">
@@ -104,7 +104,7 @@
       and writes the translations back in the file format that your framework uses.
     </p>
 
-    <h2 id="how-it-works" class="mt-10 text-sm font-semibold text-[#4ADE80]">## what it does</h2>
+    <h2 id="how-it-works" class="mt-12 text-sm font-semibold text-[#4ADE80]">## what it does</h2>
     <p class="mt-3 text-[#9AA3AB]">
       When you add or edit a string in your source locale, the other locale files go out of sync.
       dialekt diffs every target locale against your source, detects the missing keys,
@@ -113,7 +113,7 @@
       results back through an adapter for your framework. It does not touch keys that already exist.
     </p>
 
-    <h2 id="commands" class="mt-10 text-sm font-semibold text-[#4ADE80]">## commands</h2>
+    <h2 id="commands" class="mt-12 text-sm font-semibold text-[#4ADE80]">## commands</h2>
     <ul class="mt-3 space-y-2 text-[#9AA3AB] list-none">
       <li><span class="text-[#4ADE80]">translate</span> — finds missing keys, chunks them, calls the model, and writes the results.</li>
       <li><span class="text-[#4ADE80]">add</span> — inserts a new key in the source and translates it to every target locale.</li>
@@ -124,99 +124,93 @@
       <li><span class="text-[#4ADE80]">benchmark</span> — runs the two translation strategies head-to-head with real API calls.</li>
     </ul>
 
-    <h2 id="frameworks" class="mt-10 text-sm font-semibold text-[#4ADE80]">## frameworks</h2>
+    <h2 id="frameworks" class="mt-12 text-sm font-semibold text-[#4ADE80]">## frameworks</h2>
+    <p class="mt-4 text-[#9AA3AB]">
+      dialekt reads and writes your translation files through an adapter. An adapter knows how to
+      parse your framework's locale files, find the keys, and write the translations back.
+    </p>
+
+    <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">supported adapters</h3>
+    <ul class="mt-4 space-y-2.5 text-[#9AA3AB] list-none">
+      <li><span class="text-[#4ADE80]">laravel</span> — PHP array files (<span class="text-[#D6DBDF]">lang/{locale}/{domain}.php</span>) and JSON locale files.</li>
+      <li><span class="text-[#4ADE80]">paraglide</span> — inlang message-format JSON (<span class="text-[#D6DBDF]">messages/{locale}.json</span>).</li>
+      <li><span class="text-[#4ADE80]">json</span> — plain JSON locale files.</li>
+      <li><span class="text-[#4ADE80]">yaml</span> — YAML locale files (<span class="text-[#D6DBDF]">.yml</span> / <span class="text-[#D6DBDF]">.yaml</span>).</li>
+      <li><span class="text-[#4ADE80]">xliff</span> — XLIFF translation files (<span class="text-[#D6DBDF]">.xlf</span> / <span class="text-[#D6DBDF]">.xliff</span>).</li>
+      <li><span class="text-[#4ADE80]">po</span> — GNU gettext <span class="text-[#D6DBDF]">.po</span> files.</li>
+      <li><span class="text-[#4ADE80]">android</span> — Android <span class="text-[#D6DBDF]">strings.xml</span> resources.</li>
+      <li><span class="text-[#4ADE80]">ios</span> — iOS <span class="text-[#D6DBDF]">.strings</span> files.</li>
+      <li><span class="text-[#4ADE80]">arb</span> — Flutter Application Resource Bundle (<span class="text-[#D6DBDF]">.arb</span>).</li>
+      <li><span class="text-[#4ADE80]">csv</span> — CSV locale tables.</li>
+      <li><span class="text-[#4ADE80]">properties</span> — Java <span class="text-[#D6DBDF]">.properties</span> files.</li>
+    </ul>
+    <p class="mt-4 text-[#9AA3AB]">
+      You can write an adapter for another framework by implementing one interface with four
+      methods: listLocales, read, write, and findUsedKeys. See
+      <a href="#get-started" class="text-[#4ADE80] underline underline-offset-4">write your own adapter</a> below.
+    </p>
+
+    <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">model providers</h3>
     <p class="mt-3 text-[#9AA3AB]">
-      dialekt reads and writes your translation files through an adapter. Adapters exist for
-      Laravel (PHP array and JSON files), Paraglide (inlang message format), and plain JSON, YAML,
-      XLIFF, PO, Android, iOS, ARB, CSV, and properties files. You can write an adapter for another
-      framework by implementing one interface with four methods: listLocales, read, write, and findUsedKeys.
+      dialekt uses OpenRouter as its model source, so every model is available through one API key.
+      Set <span class="text-[#D6DBDF]">OPENROUTER_API_KEY</span> and reference any model by its OpenRouter id.
     </p>
-
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">supported model providers</h3>
-    <p class="mt-2 text-[#9AA3AB]">
-      dialekt works with any provider the AI SDK supports. Set the provider's API key in your
-      environment, then reference the model in your config. The examples below show the three
-      most common setups.
-    </p>
-
-    <div class="mt-4 space-y-4">
-      <div>
-        <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
-          <span class="text-[#4ADE80]">openai</span><span>OPENAI_API_KEY</span>
-        </div>
-        <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model:     { provider: "openai", modelId: "gpt-4o" },
-fastModel: { provider: "openai", modelId: "gpt-4o-mini" },</pre>
+    <div class="mt-5">
+      <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
+        <span class="text-[#4ADE80]">openrouter</span><span>OPENROUTER_API_KEY</span>
       </div>
-      <div>
-        <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
-          <span class="text-[#4ADE80]">anthropic</span><span>ANTHROPIC_API_KEY</span>
-        </div>
-        <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model:     { provider: "anthropic", modelId: "claude-opus-4" },
-fastModel: { provider: "anthropic", modelId: "claude-haiku-4" },</pre>
-      </div>
-      <div>
-        <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
-          <span class="text-[#4ADE80]">google</span><span>GOOGLE_GENERATIVE_AI_API_KEY</span>
-        </div>
-        <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model:     { provider: "google", modelId: "gemini-2.0-flash" },
-fastModel: { provider: "google", modelId: "gemini-2.0-flash-lite" },</pre>
-      </div>
+      <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model: { provider: "openrouter", modelId: "anthropic/claude-opus-4" },
+// or "openai/gpt-4o", "google/gemini-2.0-flash", "meta-llama/llama-4", ...</pre>
     </div>
-    <p class="mt-3 text-[#9AA3AB]">
-      Mix providers freely — <span class="text-[#D6DBDF]">model</span> and <span class="text-[#D6DBDF]">fastModel</span>
-      do not have to come from the same one.
+    <p class="mt-4 text-[#9AA3AB]">
+      You can also talk to a provider directly with its own key —
+      <span class="text-[#D6DBDF]">openai</span>, <span class="text-[#D6DBDF]">anthropic</span>, or
+      <span class="text-[#D6DBDF]">google</span> — by setting the matching
+      <span class="text-[#D6DBDF]">OPENAI_API_KEY</span> / <span class="text-[#D6DBDF]">ANTHROPIC_API_KEY</span> /
+      <span class="text-[#D6DBDF]">GOOGLE_GENERATIVE_AI_API_KEY</span> and using that provider name in the config.
     </p>
 
-    <h2 id="get-started" class="mt-10 text-sm font-semibold text-[#4ADE80]">## get started</h2>
+    <h2 id="get-started" class="mt-12 text-sm font-semibold text-[#4ADE80]">## get started</h2>
 
-    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">1. install</h3>
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">1. install</h3>
     <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npm install -D dialekt @dialekt/adapter-laravel</pre>
 
-    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">2. set an API key</h3>
-    <p class="mt-2 text-[#9AA3AB]">
-      dialekt talks to your model provider. Export the key for the provider you use.
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">2. set an API key</h3>
+    <p class="mt-3 text-[#9AA3AB]">
+      dialekt gets its models through OpenRouter, so one key covers every provider.
+      Put it in a <span class="text-[#D6DBDF]">.env</span> file in your project root.
     </p>
-    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">export OPENAI_API_KEY=sk-...
-# or ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY</pre>
+    <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">OPENROUTER_API_KEY=sk-or-...</pre>
 
-    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">3. configure</h3>
-    <p class="mt-2 text-[#9AA3AB]">
-      Create <span class="text-[#D6DBDF]">dialekt.config.ts</span> in your project root and point an adapter at your locale files.
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">3. configure</h3>
+    <p class="mt-3 text-[#9AA3AB]">
+      Create <span class="text-[#D6DBDF]">dialekt.config.ts</span> in your project root. Point an adapter at your
+      locale files, and load the key with <span class="text-[#D6DBDF]">env</span>.
     </p>
-    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">import { defineConfig } from "dialekt";
+    <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">import { defineConfig } from "dialekt";
 import { laravel } from "@dialekt/adapter-laravel";
 
 export default defineConfig({
+  env: [".env"],
   sourceLocale: "en",
   targetLocales: ["de", "fr", "es"],
+  model: { provider: "openrouter", modelId: "anthropic/claude-opus-4" },
   adapters: [
     laravel({ langDir: "./lang", scanPaths: ["./app", "./resources/views"] }),
   ],
 });</pre>
 
-    <h3 class="mt-6 text-[13px] font-semibold text-[#D6DBDF]">4. translate</h3>
-    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npx dialekt translate</pre>
-
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">use more than one model</h3>
-    <p class="mt-2 text-[#9AA3AB]">
-      You set two models in the config. <span class="text-[#D6DBDF]">model</span> is the default, higher-quality model.
-      <span class="text-[#D6DBDF]">fastModel</span> is a cheaper, faster model used when you pass
-      <span class="text-[#D6DBDF]">--fast</span>. You can mix providers: one model can be OpenAI and the other Anthropic.
-    </p>
-    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">export default defineConfig({
-  // ...
-  model:     { provider: "anthropic", modelId: "claude-opus-4" },
-  fastModel: { provider: "openai",    modelId: "gpt-4o-mini" },
-});</pre>
-    <p class="mt-2 text-[#9AA3AB]">
-      Run <span class="text-[#D6DBDF]">npx dialekt translate</span> for the default model, or
-      <span class="text-[#D6DBDF]">npx dialekt translate --fast</span> for the cheap one.
-      You can also run two different configs side by side by passing
-      <span class="text-[#D6DBDF]">--config path/to/other.config.ts</span> to any command.
+    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">4. translate</h3>
+    <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npx dialekt translate</pre>
+    <p class="mt-3 text-[#9AA3AB]">
+      To use a different model, change <span class="text-[#D6DBDF]">modelId</span> to any model OpenRouter lists —
+      for example <span class="text-[#D6DBDF]">openai/gpt-4o</span> or <span class="text-[#D6DBDF]">google/gemini-2.0-flash</span>.
+      You can also point a command at a second config with
+      <span class="text-[#D6DBDF]">--config path/to/other.config.ts</span>.
     </p>
 
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">write your own adapter</h3>
-    <p class="mt-2 text-[#9AA3AB]">
+    <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">write your own adapter</h3>
+    <p class="mt-3 text-[#9AA3AB]">
       An adapter teaches dialekt how to read and write your framework's translation files.
       Implement the <span class="text-[#D6DBDF]">TranslationAdapter</span> interface — four methods:
     </p>
@@ -226,7 +220,7 @@ export default defineConfig({
       <li><span class="text-[#4ADE80]">write(locale, entries)</span> — write translated keys back to the locale's files.</li>
       <li><span class="text-[#4ADE80]">findUsedKeys()</span> — scan source code and return the keys that are referenced.</li>
     </ul>
-    <p class="mt-2 text-[#9AA3AB]">
+    <p class="mt-3 text-[#9AA3AB]">
       dialekt handles the rest — the diffing, chunking, retries, and model calls.
       The adapter only knows about files.
     </p>
@@ -249,7 +243,7 @@ export function myFramework(): TranslationAdapter {
     },
   };
 }</pre>
-    <p class="mt-2 text-[#9AA3AB]">
+    <p class="mt-3 text-[#9AA3AB]">
       Register it in your config's <span class="text-[#D6DBDF]">adapters</span> array and dialekt treats it
       like a first-party adapter. See
       <span class="text-[#D6DBDF]">packages/adapter-laravel/src/adapter.ts</span> for a full reference.
