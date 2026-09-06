@@ -152,22 +152,38 @@
 
     <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">model providers</h3>
     <p class="mt-3 text-[#9AA3AB]">
-      dialekt uses OpenRouter as its model source, so every model is available through one API key.
-      Set <span class="text-[#D6DBDF]">OPENROUTER_API_KEY</span> and reference any model by its OpenRouter id.
+      dialekt is built on the <a href="https://sdk.vercel.ai" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">Vercel AI SDK</a>, so
+      <strong class="text-[#D6DBDF]">any LLM provider</strong> with an AI SDK integration works.
+      Configure a model in one of two ways:
     </p>
     <div class="mt-5">
       <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
-        <span class="text-[#4ADE80]">openrouter</span><span>OPENROUTER_API_KEY</span>
+        <span class="text-[#4ADE80]">A — provider + model id</span>
       </div>
-      <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model: { provider: "openrouter", modelId: "anthropic/claude-opus-4" },
-// or "openai/gpt-4o", "google/gemini-2.0-flash", "meta-llama/llama-4", ...</pre>
+      <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model: { provider: "openai", modelId: "gpt-4o" },
+model: { provider: "openrouter", modelId: "deepseek/deepseek-v4-flash" },
+model: { provider: "anthropic", modelId: "claude-sonnet-4-20250514" },
+model: { provider: "google", modelId: "gemini-2.5-flash" },</pre>
+    </div>
+    <div class="mt-4">
+      <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
+        <span class="text-[#4ADE80]">B — live Vercel AI SDK model</span>
+      </div>
+      <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
+
+// any AI SDK factory works
+export default defineConfig({
+  model: openai("gpt-4o-mini"),
+  // or bring your own OpenAI­compatible endpoint
+  fastModel: createOpenAI({ baseURL: "https://your-proxy.com/v1" })("gpt-4o-mini"),
+});</pre>
     </div>
     <p class="mt-4 text-[#9AA3AB]">
-      You can also talk to a provider directly with its own key —
-      <span class="text-[#D6DBDF]">openai</span>, <span class="text-[#D6DBDF]">anthropic</span>, or
-      <span class="text-[#D6DBDF]">google</span> — by setting the matching
-      <span class="text-[#D6DBDF]">OPENAI_API_KEY</span> / <span class="text-[#D6DBDF]">ANTHROPIC_API_KEY</span> /
-      <span class="text-[#D6DBDF]">GOOGLE_GENERATIVE_AI_API_KEY</span> and using that provider name in the config.
+      This means you can use providers like OpenAI, Anthropic, Google, Mistral, Groq,
+      Together, Fireworks, DeepSeek, OpenRouter, Perplexity, xAI, and
+      <a href="https://sdk.vercel.ai/providers/ai-sdk-providers" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">dozens more</a> —
+      just install the matching <code class="text-[#D6DBDF] text-[12px]">@ai-sdk/*</code> package and pass the model.
     </p>
 
     <h2 id="get-started" class="mt-12 text-sm font-semibold text-[#4ADE80]">## get started</h2>
