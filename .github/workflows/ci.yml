@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build first — adapters reference dialekt via TypeScript project references.
+      - run: pnpm build
+
+      # gesetz runs oxlint, oxfmt (check), vitest, and architecture/quality rules.
+      # Any violation = non-zero exit.
+      - run: pnpm check
+
+      # Full typecheck across all 12 packages.
+      - run: pnpm typecheck
