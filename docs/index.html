@@ -26,11 +26,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 
 <style type="text/tailwindcss">
 @theme {
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 }
 </style>
 
@@ -62,8 +63,64 @@
   /* the readable document sits below the fold as a real second screen */
   #doc { border-top: 1px solid #1A1E23; }
 
+  /* ── explainer visuals ── */
+  .viz-stack { margin-top: 2.5rem; display: grid; gap: 1.5rem; }
+  .viz figcaption { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #6B7680; margin-bottom: .5rem; }
+  .viz-box { border: 1px solid #1A1E23; border-radius: 10px; background: #0C0E11; padding: 1rem 1.25rem; overflow: hidden; }
+
+  /* A — find the gaps */
+  .va-grid { display: flex; gap: 1rem; align-items: stretch; flex-wrap: wrap; }
+  .va-file { flex: 1 1 240px; min-width: 220px; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 2; }
+  .va-head { color: #6B7680; font-size: 10.5px; border-bottom: 1px solid #1A1E23; padding-bottom: .35rem; margin-bottom: .5rem; }
+  .va-row { display: flex; gap: .75rem; align-items: baseline; }
+  .va-k { color: #D6DBDF; }
+  .va-v { color: #9AA3AB; overflow: hidden; text-overflow: ellipsis; }
+  .va-sep { color: #4ADE80; align-self: center; font-size: 16px; }
+  .va-state { display: inline-grid; }
+  .va-state > * { grid-area: 1 / 1; }
+  .va-m { color: #F87171; border: 1px dashed rgba(248,113,113,.45); border-radius: 4px; padding: 0 .4rem; font-size: 11px; white-space: nowrap; }
+  .va-f { color: #4ADE80; white-space: nowrap; }
+  .va-miss { border-radius: 4px; margin: 0 -.3rem; padding: 0 .3rem; }
+  .va-f { opacity: 0; }
+  .viz.on .va-m { animation: v-out 6s infinite; animation-delay: var(--d, 0s); }
+  .viz.on .va-f { animation: v-in 6s infinite; animation-delay: var(--d, 0s); }
+  .viz.on .va-miss { animation: v-scan 6s infinite; animation-delay: var(--d, 0s); }
+  .viz.on .va-sep { animation: v-pulse 1.6s ease-in-out infinite; }
+
+  /* B — chunking */
+  .vb { display: flex; flex-direction: column; gap: .55rem; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .vb-row { display: flex; gap: .75rem; align-items: baseline; }
+  .vb-label { color: #9AA3AB; min-width: 118px; }
+  .vb-state { display: inline-grid; }
+  .vb-state > * { grid-area: 1 / 1; }
+  .vb-send { color: #6B7680; display: inline-flex; gap: .45rem; align-items: center; }
+  .vb-dot { width: 6px; height: 6px; border-radius: 50%; background: #67E8F9; animation: v-pulse 1s ease-in-out infinite; }
+  .vb-done { color: #4ADE80; }
+  .vb-done { opacity: 0; }
+  .viz.on .vb-send { animation: v-out 4s infinite; animation-delay: var(--d, 0s); }
+  .viz.on .vb-done { animation: v-in 4s infinite; animation-delay: var(--d, 0s); }
+
+  /* C — retry */
+  .vc { display: flex; flex-direction: column; gap: .45rem; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .vc-row { display: flex; gap: .75rem; align-items: baseline; opacity: 0; }
+  .viz.on .vc-row { animation: v-appear 8s infinite; animation-delay: var(--d, 0s); }
+  .vc-a { color: #9AA3AB; min-width: 76px; }
+  .vc-x { color: #F87171; }
+  .vc-ok { color: #4ADE80; }
+  .vc-b { color: #3A4048; font-size: 11px; margin-left: auto; }
+
+  @keyframes v-out { 0%, 50% { opacity: 1; } 65%, 100% { opacity: 0; } }
+  @keyframes v-in { 0%, 55% { opacity: 0; } 70%, 100% { opacity: 1; } }
+  @keyframes v-scan { 0%, 14% { background: rgba(248,113,113,.16); } 100% { background: transparent; } }
+  @keyframes v-pulse { 50% { opacity: .3; } }
+  @keyframes v-appear { 0% { opacity: 0; transform: translateY(3px); } 4% { opacity: 1; transform: none; } 100% { opacity: 1; } }
+
   @media (prefers-reduced-motion: reduce) {
     .cursor-blink, .pulse { animation: none; }
+    .viz.on .va-m, .viz.on .vb-send { animation: none; opacity: 0; }
+    .viz.on .va-f, .viz.on .vb-done { animation: none; opacity: 1; }
+    .viz.on .va-miss, .viz.on .va-sep { animation: none; }
+    .viz.on .vc-row { animation: none; opacity: 1; }
   }
 </style>
 </head>
@@ -94,81 +151,193 @@
 </div>
 
 <!-- ══ the readable document: full content for crawlers and readers who scroll ══ -->
-<main id="doc" class="bg-[#08090B] text-[#D6DBDF] font-mono">
-  <div class="max-w-2xl mx-auto px-6 py-20 text-[14px] leading-[1.9]">
+<main id="doc" class="bg-[#08090B] text-[#D6DBDF]">
+  <div class="max-w-3xl mx-auto px-6 py-20 sm:py-24">
 
-    <h1 class="text-2xl font-semibold tracking-tight text-[#D6DBDF]">dialekt<span class="text-[#4ADE80]">.</span></h1>
-    <p class="mt-4 text-[#9AA3AB]">
-      dialekt is a command-line tool that translates application strings with a large language model.
-      It finds the keys that are missing from your target locale files, sends them to a model,
-      and writes the translations back in the file format that your framework uses.
-    </p>
+    <!-- header -->
+    <header class="max-w-2xl">
+      <p class="font-mono text-[11px] tracking-widest text-[#6B7680] uppercase">llm cli &middot; application translation</p>
+      <h1 class="mt-5 font-mono text-5xl sm:text-6xl font-semibold tracking-tight text-[#D6DBDF]">dialekt<span class="text-[#4ADE80]">.</span></h1>
+      <p class="mt-6 font-sans text-lg sm:text-[19px] leading-[1.7] text-[#9AA3AB]">
+        dialekt is a command-line tool that translates application strings with a large language model.
+        It finds the keys that are missing from your target locale files, sends them to a model,
+        and writes the translations back in the file format that your framework uses.
+      </p>
+    </header>
 
-    <h2 id="how-it-works" class="mt-12 text-sm font-semibold text-[#4ADE80]">## what it does</h2>
-    <p class="mt-3 text-[#9AA3AB]">
-      When you add or edit a string in your source locale, the other locale files go out of sync.
-      dialekt diffs every target locale against your source, detects the missing keys,
-      and fills them with model-generated translations. It chunks large translation sets to stay
-      under token limits, retries a chunk when the model returns malformed output, and writes the
-      results back through an adapter for your framework. It does not touch keys that already exist.
-    </p>
+    <section class="mt-20 sm:mt-24">
+      <h2 id="how-it-works" class="font-mono text-lg font-semibold tracking-tight text-[#4ADE80]">## what it does</h2>
+      <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+        When you add or edit a string in your source locale, the other locale files go out of sync.
+        dialekt diffs every target locale against your source, detects the missing keys,
+        and fills them with model-generated translations. It chunks large translation sets to stay
+        under token limits, retries a chunk when the model returns malformed output, and writes the
+        results back through an adapter for your framework. It does not touch keys that already exist.
+      </p>
 
-    <h2 id="commands" class="mt-12 text-sm font-semibold text-[#4ADE80]">## commands</h2>
-    <ul class="mt-3 space-y-2 text-[#9AA3AB] list-none">
-      <li><span class="text-[#4ADE80]">translate</span> — finds missing keys, chunks them, calls the model, and writes the results.</li>
-      <li><span class="text-[#4ADE80]">add</span> — inserts a new key in the source and translates it to every target locale.</li>
-      <li><span class="text-[#4ADE80]">missing</span> — lists every missing key without writing any files.</li>
-      <li><span class="text-[#4ADE80]">unused</span> — scans your source code and flags keys that nothing references.</li>
-      <li><span class="text-[#4ADE80]">validate</span> — exits with a non-zero code when any locale is missing keys, for CI.</li>
-      <li><span class="text-[#4ADE80]">languages</span> — prints the locales that each adapter detected.</li>
-    </ul>
+      <!-- explainers -->
+      <div class="viz-stack">
 
-    <h2 id="frameworks" class="mt-12 text-sm font-semibold text-[#4ADE80]">## frameworks</h2>
-    <p class="mt-4 text-[#9AA3AB]">
-      dialekt reads and writes your translation files through an adapter. An adapter knows how to
-      parse your framework's locale files, find the keys, and write the translations back.
-    </p>
+        <figure class="viz" data-viz>
+          <figcaption>find the gaps &mdash; missing keys are diffed against the source</figcaption>
+          <div class="viz-box">
+            <div class="va-grid">
+              <div class="va-file">
+                <div class="va-head">lang/en/auth.php</div>
+                <div class="va-row"><span class="va-k">login</span><span class="va-v">'Log in'</span></div>
+                <div class="va-row"><span class="va-k">logout</span><span class="va-v">'Log out'</span></div>
+                <div class="va-row"><span class="va-k">forgot_password</span><span class="va-v">'Forgot your password?'</span></div>
+                <div class="va-row"><span class="va-k">remember_me</span><span class="va-v">'Remember me'</span></div>
+              </div>
+              <div class="va-sep">⟶</div>
+              <div class="va-file">
+                <div class="va-head">lang/de/auth.php</div>
+                <div class="va-row"><span class="va-k">login</span><span class="va-v">'Anmelden'</span></div>
+                <div class="va-row"><span class="va-k">logout</span><span class="va-v">'Abmelden'</span></div>
+                <div class="va-row va-miss" style="--d: 0s">
+                  <span class="va-k">forgot_password</span>
+                  <span class="va-state"><span class="va-m">missing</span><span class="va-f">'Passwort vergessen?' ✓</span></span>
+                </div>
+                <div class="va-row va-miss" style="--d: 2.8s">
+                  <span class="va-k">remember_me</span>
+                  <span class="va-state"><span class="va-m">missing</span><span class="va-f">'Angemeldet bleiben' ✓</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
 
-    <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">supported adapters</h3>
-    <ul class="mt-4 space-y-2.5 text-[#9AA3AB] list-none">
-      <li><span class="text-[#4ADE80]">laravel</span> — PHP array files (<span class="text-[#D6DBDF]">lang/{locale}/{domain}.php</span>) and JSON locale files.</li>
-      <li><span class="text-[#4ADE80]">paraglide</span> — inlang message-format JSON (<span class="text-[#D6DBDF]">messages/{locale}.json</span>).</li>
-      <li><span class="text-[#4ADE80]">json</span> — plain JSON locale files.</li>
-      <li><span class="text-[#4ADE80]">yaml</span> — YAML locale files (<span class="text-[#D6DBDF]">.yml</span> / <span class="text-[#D6DBDF]">.yaml</span>).</li>
-      <li><span class="text-[#4ADE80]">xliff</span> — XLIFF translation files (<span class="text-[#D6DBDF]">.xlf</span> / <span class="text-[#D6DBDF]">.xliff</span>).</li>
-      <li><span class="text-[#4ADE80]">po</span> — GNU gettext <span class="text-[#D6DBDF]">.po</span> files.</li>
-      <li><span class="text-[#4ADE80]">android</span> — Android <span class="text-[#D6DBDF]">strings.xml</span> resources.</li>
-      <li><span class="text-[#4ADE80]">ios</span> — iOS <span class="text-[#D6DBDF]">.strings</span> files.</li>
-      <li><span class="text-[#4ADE80]">arb</span> — Flutter Application Resource Bundle (<span class="text-[#D6DBDF]">.arb</span>).</li>
-      <li><span class="text-[#4ADE80]">csv</span> — CSV locale tables.</li>
-      <li><span class="text-[#4ADE80]">properties</span> — Java <span class="text-[#D6DBDF]">.properties</span> files.</li>
-    </ul>
-    <p class="mt-4 text-[#9AA3AB]">
-      You can write an adapter for another framework by implementing one interface with four
-      methods: listLocales, read, write, and findUsedKeys. See
-      <a href="#get-started" class="text-[#4ADE80] underline underline-offset-4">write your own adapter</a> below.
-    </p>
+        <figure class="viz" data-viz>
+          <figcaption>chunk &mdash; large sets are split to stay under token limits</figcaption>
+          <div class="viz-box">
+            <div class="vb">
+              <div class="vb-row" style="--d: 0s"><span class="vb-label">chunk 1 · 6 keys</span><span class="vb-state"><span class="vb-send"><i class="vb-dot"></i>sending</span><span class="vb-done">✓ translated</span></span></div>
+              <div class="vb-row" style="--d: .8s"><span class="vb-label">chunk 2 · 6 keys</span><span class="vb-state"><span class="vb-send"><i class="vb-dot"></i>sending</span><span class="vb-done">✓ translated</span></span></div>
+              <div class="vb-row" style="--d: 1.6s"><span class="vb-label">chunk 3 · 5 keys</span><span class="vb-state"><span class="vb-send"><i class="vb-dot"></i>sending</span><span class="vb-done">✓ translated</span></span></div>
+            </div>
+          </div>
+        </figure>
 
-    <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">model providers</h3>
-    <p class="mt-3 text-[#9AA3AB]">
-      dialekt is built on the <a href="https://sdk.vercel.ai" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">Vercel AI SDK</a>, so
-      <strong class="text-[#D6DBDF]">any LLM provider</strong> with an AI SDK integration works.
-      Configure a model in one of two ways:
-    </p>
-    <div class="mt-5">
-      <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
-        <span class="text-[#4ADE80]">A — provider + model id</span>
+        <figure class="viz" data-viz>
+          <figcaption>retry &mdash; a malformed chunk retries with backoff</figcaption>
+          <div class="viz-box">
+            <div class="vc">
+              <div class="vc-row" style="--d: 0s"><span class="vc-a">attempt 1</span><span class="vc-x">✗ malformed</span><span class="vc-b">+1s</span></div>
+              <div class="vc-row" style="--d: 2.4s"><span class="vc-a">attempt 2</span><span class="vc-x">✗ malformed</span><span class="vc-b">+2s</span></div>
+              <div class="vc-row" style="--d: 4.8s"><span class="vc-a">attempt 3</span><span class="vc-ok">✓ written</span></div>
+            </div>
+          </div>
+        </figure>
+
       </div>
-      <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>model: { provider: "openai", modelId: "gpt-4o" },
+    </section>
+
+    <section class="mt-16 sm:mt-20">
+      <h2 id="commands" class="font-mono text-lg font-semibold tracking-tight text-[#4ADE80]">## commands</h2>
+      <div class="mt-5 border-y border-[#1A1E23] divide-y divide-[#1A1E23]">
+        <div class="py-3.5 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">translate</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Finds missing keys, chunks them, calls the model, and writes the results.</p>
+        </div>
+        <div class="py-3.5 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">add</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Inserts a new key in the source and translates it to every target locale.</p>
+        </div>
+        <div class="py-3.5 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">missing</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Lists every missing key without writing any files.</p>
+        </div>
+        <div class="py-3.5 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">unused</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Scans your source code and flags keys that nothing references.</p>
+        </div>
+        <div class="py-3.5 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">validate</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Exits with a non-zero code when any locale is missing keys, for CI.</p>
+        </div>
+        <div class="py-3.5 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">languages</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Prints the locales that each adapter detected.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-16 sm:mt-20">
+      <h2 id="frameworks" class="font-mono text-lg font-semibold tracking-tight text-[#4ADE80]">## frameworks</h2>
+      <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+        dialekt reads and writes your translation files through an adapter. An adapter knows how to
+        parse your framework's locale files, find the keys, and write the translations back.
+      </p>
+
+      <h3 class="mt-10 font-mono text-[15px] font-semibold text-[#D6DBDF]">## supported adapters</h3>
+      <div class="mt-4 border-y border-[#1A1E23] divide-y divide-[#1A1E23]">
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">laravel</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">PHP array files (<code class="font-mono text-[12.5px] text-[#D6DBDF]">lang/{locale}/{domain}.php</code>) and JSON locale files.</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">paraglide</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Inlang message-format JSON (<code class="font-mono text-[12.5px] text-[#D6DBDF]">messages/{locale}.json</code>).</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">json</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Plain JSON locale files.</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">yaml</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">YAML locale files (<code class="font-mono text-[12.5px] text-[#D6DBDF]">.yml</code> / <code class="font-mono text-[12.5px] text-[#D6DBDF]">.yaml</code>).</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">xliff</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">XLIFF translation files (<code class="font-mono text-[12.5px] text-[#D6DBDF]">.xlf</code> / <code class="font-mono text-[12.5px] text-[#D6DBDF]">.xliff</code>).</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">po</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">GNU gettext <code class="font-mono text-[12.5px] text-[#D6DBDF]">.po</code> files.</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">android</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Android <code class="font-mono text-[12.5px] text-[#D6DBDF]">strings.xml</code> resources.</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">ios</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">iOS <code class="font-mono text-[12.5px] text-[#D6DBDF]">.strings</code> files.</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">arb</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Flutter Application Resource Bundle (<code class="font-mono text-[12.5px] text-[#D6DBDF]">.arb</code>).</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">csv</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">CSV locale tables.</p>
+        </div>
+        <div class="py-3 grid sm:grid-cols-[150px_1fr] gap-x-8 gap-y-1 items-baseline">
+          <code class="font-mono text-[13px] font-medium text-[#4ADE80]">properties</code>
+          <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Java <code class="font-mono text-[12.5px] text-[#D6DBDF]">.properties</code> files.</p>
+        </div>
+      </div>
+      <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+        You can write an adapter for another framework by implementing one interface with four
+        methods: listLocales, read, write, and findUsedKeys. See
+        <a href="#get-started" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">write your own adapter</a> below.
+      </p>
+
+      <h3 class="mt-12 font-mono text-[15px] font-semibold text-[#D6DBDF]">## model providers</h3>
+      <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+        dialekt is built on the <a href="https://sdk.vercel.ai" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">Vercel AI SDK</a>, so
+        <strong class="text-[#D6DBDF] font-semibold">any LLM provider</strong> with an AI SDK integration works.
+        Configure a model in one of two ways:
+      </p>
+      <div class="mt-6">
+        <p class="font-mono text-[11px] text-[#6B7680]">A &mdash; provider + model id</p>
+        <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto" data-hl>model: { provider: "openai", modelId: "gpt-4o" },
 model: { provider: "openrouter", modelId: "deepseek/deepseek-v4-flash" },
 model: { provider: "anthropic", modelId: "claude-sonnet-4-20250514" },
 model: { provider: "google", modelId: "gemini-2.5-flash" },</pre>
-    </div>
-    <div class="mt-4">
-      <div class="flex items-center justify-between text-[11px] text-[#6B7680]">
-        <span class="text-[#4ADE80]">B — live Vercel AI SDK model</span>
       </div>
-      <pre class="mt-1.5 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[13px] overflow-x-auto leading-relaxed" data-hl>import { openai } from "@ai-sdk/openai";
+      <div class="mt-5">
+        <p class="font-mono text-[11px] text-[#6B7680]">B &mdash; live Vercel AI SDK model</p>
+        <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto" data-hl>import { openai } from "@ai-sdk/openai";
 import { createOpenAI } from "@ai-sdk/openai";
 
 // any AI SDK factory works
@@ -177,32 +346,40 @@ export default defineConfig({
   // or bring your own OpenAI­compatible endpoint
   fastModel: createOpenAI({ baseURL: "https://your-proxy.com/v1" })("gpt-4o-mini"),
 });</pre>
-    </div>
-    <p class="mt-4 text-[#9AA3AB]">
-      This means you can use providers like OpenAI, Anthropic, Google, Mistral, Groq,
-      Together, Fireworks, DeepSeek, OpenRouter, Perplexity, xAI, and
-      <a href="https://sdk.vercel.ai/providers/ai-sdk-providers" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">dozens more</a> —
-      just install the matching <code class="text-[#D6DBDF] text-[12px]">@ai-sdk/*</code> package and pass the model.
-    </p>
+      </div>
+      <p class="mt-5 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+        This means you can use providers like OpenAI, Anthropic, Google, Mistral, Groq,
+        Together, Fireworks, DeepSeek, OpenRouter, Perplexity, xAI, and
+        <a href="https://sdk.vercel.ai/providers/ai-sdk-providers" class="text-[#4ADE80] underline decoration-dotted underline-offset-4 hover:text-[#6EE7A0]">dozens more</a> &mdash;
+        just install the matching <code class="font-mono text-[12px] text-[#D6DBDF]">@ai-sdk/*</code> package and pass the model.
+      </p>
+    </section>
 
-    <h2 id="get-started" class="mt-12 text-sm font-semibold text-[#4ADE80]">## get started</h2>
+    <section class="mt-16 sm:mt-20">
+      <h2 id="get-started" class="font-mono text-lg font-semibold tracking-tight text-[#4ADE80]">## get started</h2>
 
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">1. install</h3>
-    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npm install -D dialekt @dialekt/adapter-laravel</pre>
+      <div class="mt-8 space-y-10">
+        <div>
+          <h3 class="font-mono text-[15px] font-semibold text-[#D6DBDF]"><span class="text-[#4ADE80]">1.</span> install</h3>
+          <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto">npm install -D dialekt @dialekt/adapter-laravel</pre>
+        </div>
 
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">2. set an API key</h3>
-    <p class="mt-3 text-[#9AA3AB]">
-      dialekt gets its models through OpenRouter, so one key covers every provider.
-      Put it in a <span class="text-[#D6DBDF]">.env</span> file in your project root.
-    </p>
-    <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">OPENROUTER_API_KEY=sk-or-...</pre>
+        <div>
+          <h3 class="font-mono text-[15px] font-semibold text-[#D6DBDF]"><span class="text-[#4ADE80]">2.</span> set an API key</h3>
+          <p class="mt-3 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+            dialekt gets its models through OpenRouter, so one key covers every provider.
+            Put it in a <code class="font-mono text-[12.5px] text-[#D6DBDF]">.env</code> file in your project root.
+          </p>
+          <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto">OPENROUTER_API_KEY=sk-or-...</pre>
+        </div>
 
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">3. configure</h3>
-    <p class="mt-3 text-[#9AA3AB]">
-      Create <span class="text-[#D6DBDF]">dialekt.config.ts</span> in your project root. Point an adapter at your
-      locale files, and load the key with <span class="text-[#D6DBDF]">env</span>.
-    </p>
-    <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">import { defineConfig } from "dialekt";
+        <div>
+          <h3 class="font-mono text-[15px] font-semibold text-[#D6DBDF]"><span class="text-[#4ADE80]">3.</span> configure</h3>
+          <p class="mt-3 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+            Create <code class="font-mono text-[12.5px] text-[#D6DBDF]">dialekt.config.ts</code> in your project root. Point an adapter at your
+            locale files, and load the key with <code class="font-mono text-[12.5px] text-[#D6DBDF]">env</code>.
+          </p>
+          <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto">import { defineConfig } from "dialekt";
 import { laravel } from "@dialekt/adapter-laravel";
 
 export default defineConfig({
@@ -214,32 +391,48 @@ export default defineConfig({
     laravel({ langDir: "./lang", scanPaths: ["./app", "./resources/views"] }),
   ],
 });</pre>
+        </div>
 
-    <h3 class="mt-8 text-[13px] font-semibold text-[#D6DBDF]">4. translate</h3>
-    <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">npx dialekt translate</pre>
-    <p class="mt-3 text-[#9AA3AB]">
-      To use a different model, change <span class="text-[#D6DBDF]">modelId</span> to any model OpenRouter lists —
-      for example <span class="text-[#D6DBDF]">openai/gpt-4o</span> or <span class="text-[#D6DBDF]">google/gemini-2.0-flash</span>.
-      You can also point a command at a second config with
-      <span class="text-[#D6DBDF]">--config path/to/other.config.ts</span>.
-    </p>
+        <div>
+          <h3 class="font-mono text-[15px] font-semibold text-[#D6DBDF]"><span class="text-[#4ADE80]">4.</span> translate</h3>
+          <pre class="mt-3 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto">npx dialekt translate</pre>
+          <p class="mt-3 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+            To use a different model, change <code class="font-mono text-[12.5px] text-[#D6DBDF]">modelId</code> to any model OpenRouter lists &mdash;
+            for example <code class="font-mono text-[12.5px] text-[#D6DBDF]">openai/gpt-4o</code> or <code class="font-mono text-[12.5px] text-[#D6DBDF]">google/gemini-2.0-flash</code>.
+            You can also point a command at a second config with
+            <code class="font-mono text-[12.5px] text-[#D6DBDF]">--config path/to/other.config.ts</code>.
+          </p>
+        </div>
 
-    <h3 class="mt-10 text-[13px] font-semibold text-[#D6DBDF]">write your own adapter</h3>
-    <p class="mt-3 text-[#9AA3AB]">
-      An adapter teaches dialekt how to read and write your framework's translation files.
-      Implement the <span class="text-[#D6DBDF]">TranslationAdapter</span> interface — four methods:
-    </p>
-    <ul class="mt-2 space-y-1.5 text-[#9AA3AB] list-none">
-      <li><span class="text-[#4ADE80]">listLocales()</span> — return the locale codes that the adapter finds on disk.</li>
-      <li><span class="text-[#4ADE80]">read(locale)</span> — return all keys and their strings for a locale.</li>
-      <li><span class="text-[#4ADE80]">write(locale, entries)</span> — write translated keys back to the locale's files.</li>
-      <li><span class="text-[#4ADE80]">findUsedKeys()</span> — scan source code and return the keys that are referenced.</li>
-    </ul>
-    <p class="mt-3 text-[#9AA3AB]">
-      dialekt handles the rest — the diffing, chunking, retries, and model calls.
-      The adapter only knows about files.
-    </p>
-    <pre class="mt-2 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded text-[#D6DBDF] text-[13px] overflow-x-auto">import type { TranslationAdapter } from "dialekt";
+        <div>
+          <h3 class="font-mono text-[15px] font-semibold text-[#D6DBDF]">## write your own adapter</h3>
+          <p class="mt-3 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+            An adapter teaches dialekt how to read and write your framework's translation files.
+            Implement the <code class="font-mono text-[12.5px] text-[#D6DBDF]">TranslationAdapter</code> interface &mdash; four methods:
+          </p>
+          <div class="mt-4 border-y border-[#1A1E23] divide-y divide-[#1A1E23]">
+            <div class="py-3 grid sm:grid-cols-[170px_1fr] gap-x-8 gap-y-1 items-baseline">
+              <code class="font-mono text-[13px] font-medium text-[#4ADE80]">listLocales()</code>
+              <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Return the locale codes that the adapter finds on disk.</p>
+            </div>
+            <div class="py-3 grid sm:grid-cols-[170px_1fr] gap-x-8 gap-y-1 items-baseline">
+              <code class="font-mono text-[13px] font-medium text-[#4ADE80]">read(locale)</code>
+              <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Return all keys and their strings for a locale.</p>
+            </div>
+            <div class="py-3 grid sm:grid-cols-[170px_1fr] gap-x-8 gap-y-1 items-baseline">
+              <code class="font-mono text-[13px] font-medium text-[#4ADE80]">write(locale, entries)</code>
+              <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Write translated keys back to the locale's files.</p>
+            </div>
+            <div class="py-3 grid sm:grid-cols-[170px_1fr] gap-x-8 gap-y-1 items-baseline">
+              <code class="font-mono text-[13px] font-medium text-[#4ADE80]">findUsedKeys()</code>
+              <p class="font-sans text-[14px] leading-relaxed text-[#9AA3AB]">Scan source code and return the keys that are referenced.</p>
+            </div>
+          </div>
+          <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+            dialekt handles the rest &mdash; the diffing, chunking, retries, and model calls.
+            The adapter only knows about files.
+          </p>
+          <pre class="mt-4 p-4 bg-[#0C0E11] border border-[#1A1E23] rounded-lg font-mono text-[13px] leading-relaxed text-[#D6DBDF] overflow-x-auto">import type { TranslationAdapter } from "dialekt";
 
 export function myFramework(): TranslationAdapter {
   return {
@@ -258,16 +451,19 @@ export function myFramework(): TranslationAdapter {
     },
   };
 }</pre>
-    <p class="mt-3 text-[#9AA3AB]">
-      Register it in your config's <span class="text-[#D6DBDF]">adapters</span> array and dialekt treats it
-      like a first-party adapter. See
-      <span class="text-[#D6DBDF]">packages/adapter-laravel/src/adapter.ts</span> for a full reference.
-    </p>
+          <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+            Register it in your config's <code class="font-mono text-[12.5px] text-[#D6DBDF]">adapters</code> array and dialekt treats it
+            like a first-party adapter. See
+            <code class="font-mono text-[12.5px] text-[#D6DBDF]">packages/adapter-laravel/src/adapter.ts</code> for a full reference.
+          </p>
+        </div>
+      </div>
+    </section>
 
-    <p class="mt-12 text-[#6B7680] text-[12px]">
-      dialekt · MIT license ·
-      <a href="https://github.com/mateffy/dialekt" class="text-[#4ADE80] underline underline-offset-4">github.com/mateffy/dialekt</a>
-    </p>
+    <footer class="mt-20 pt-8 border-t border-[#1A1E23] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <p class="font-mono text-[12px] text-[#6B7680]">dialekt <span class="text-[#3A4048]">·</span> MIT license</p>
+      <a href="https://github.com/mateffy/dialekt" class="font-mono text-[12px] text-[#4ADE80] hover:text-[#6EE7A0] transition-colors">github.com/mateffy/dialekt</a>
+    </footer>
   </div>
 </main>
 
@@ -669,6 +865,16 @@ async function playStep(i) {
   if (t !== runToken) return;
   playStep((i + 1) % totalSteps);
 }
+
+/* explainer visuals: start animating when scrolled into view */
+document.querySelectorAll('.viz').forEach(v => {
+  const io = new IntersectionObserver((entries, obs) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('on'); obs.disconnect(); }
+    });
+  }, { threshold: 0.3 });
+  io.observe(v);
+});
 
 /* kick off */
 playStep(0);
