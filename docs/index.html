@@ -121,7 +121,6 @@
       <li><span class="text-[#4ADE80]">unused</span> — scans your source code and flags keys that nothing references.</li>
       <li><span class="text-[#4ADE80]">validate</span> — exits with a non-zero code when any locale is missing keys, for CI.</li>
       <li><span class="text-[#4ADE80]">languages</span> — prints the locales that each adapter detected.</li>
-      <li><span class="text-[#4ADE80]">benchmark</span> — runs the two translation strategies head-to-head with real API calls.</li>
     </ul>
 
     <h2 id="frameworks" class="mt-12 text-sm font-semibold text-[#4ADE80]">## frameworks</h2>
@@ -565,7 +564,7 @@ const STEPS = [
 
   /* 4 — the rest */
   async (t) => {
-    line(D('# seven commands. that is the whole surface.'));
+    line(D('# six commands. that is the whole surface.'));
     if (!await sleep(500, t)) return;
     if (!await typeCmd('npx dialekt --help', t)) return;
     line();
@@ -576,7 +575,6 @@ const STEPS = [
       ['unused',    'flag keys that nothing references'],
       ['validate',  'exit non-zero on drift, for CI'],
       ['languages', 'print the locales each adapter detected'],
-      ['benchmark', 'run both strategies head-to-head'],
     ];
     for (const [cmd, desc] of rows) {
       line(`  ${G(cmd.padEnd(11))} ${D(desc)}`);

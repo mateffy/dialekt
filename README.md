@@ -22,7 +22,6 @@ dialekt is an extendable harness, not a closed box. The core package handles chu
 | `missing`   | Lists every missing key without writing files        |
 | `unused`    | Scans source code for keys that no longer appear     |
 | `languages` | Shows which locales each adapter detected            |
-| `benchmark` | Runs two strategies head-to-head with real API calls |
 
 ## Quick start
 
@@ -49,9 +48,7 @@ import { laravel } from "@dialekt/adapter-laravel";
 export default defineConfig({
   sourceLocale: "en",
   targetLocales: ["de", "fr", "es"],
-  strategy: "one-shot",
   model: { provider: "openai", modelId: "gpt-4o" },
-  fastModel: { provider: "openai", modelId: "gpt-4o-mini" },
   chunking: { maxTokens: 3000, charsPerToken: 3.0, concurrency: 3 },
   retry: { maxAttempts: 3, baseDelayMs: 1000 },
   adapters: [laravel({ langDir: "./lang", scanPaths: ["./app", "./resources/views"] })],
@@ -111,24 +108,25 @@ export OPENAI_API_KEY=sk-...
 npx dialekt translate
 ```
 
-## Translation strategies
-
-dialekt includes two strategies. Switch between them in your config file.
-
-**one-shot** (default) — Sends the source file and missing keys to the model with a structured JSON schema. Works with any model that supports JSON output. Fast and predictable.
-
-**tool-loop-agent** — Gives the model a `submitTranslations` tool and lets it reflect on its output before committing. Slightly more expensive, but self-correcting when the model hallucinates a key name.
-
-Run `npx dialekt benchmark` to compare them with real API calls before you pick one.
-
 ## Adapters
 
-An adapter teaches dialekt how to read and write your framework's translation files.
+An adapter teaches dialekt how to read and write your framework's translation files. Install only the ones you use.
 
-- **Laravel** — PHP array files (`lang/{locale}/{domain}.php`) and JSON locale files (`lang/{locale}.json`). Requires `php` on your `PATH`.
-- **Paraglide** — inlang message-format JSON files (`messages/{locale}.json`).
+| Adapter                    | File format                                                    |
+| -------------------------- | -------------------------------------------------------------- |
+| `@dialekt/adapter-laravel` | PHP array files (`lang/{locale}/{domain}.php`) and JSON locale files |
+| `@dialekt/adapter-paraglide` | inlang message-format JSON (`messages/{locale}.json`)        |
+| `@dialekt/adapter-json`    | Plain JSON locale files                                        |
+| `@dialekt/adapter-yaml`    | YAML locale files (`.yml` / `.yaml`)                           |
+| `@dialekt/adapter-xliff`   | XLIFF translation files (`.xlf` / `.xliff`)                    |
+| `@dialekt/adapter-po`      | GNU gettext `.po` files                                        |
+| `@dialekt/adapter-android` | Android `strings.xml` resources                                |
+| `@dialekt/adapter-ios`     | iOS `.strings` files                                           |
+| `@dialekt/adapter-arb`     | Flutter Application Resource Bundle (`.arb`)                   |
+| `@dialekt/adapter-csv`     | CSV locale tables                                              |
+| `@dialekt/adapter-properties` | Java `.properties` files                                    |
 
-Both adapters can scan your source code for stale keys: Laravel looks for `__('domain.key')` calls, Paraglide looks for `m.messageName(...)` references.
+The Laravel adapter requires `php` on your `PATH`. Both the Laravel and Paraglide adapters can scan your source code for stale keys: Laravel looks for `__('domain.key')` calls, Paraglide looks for `m.messageName(...)` references.
 
 You can write your own adapter by implementing the `TranslationAdapter` interface. See [`packages/adapter-laravel/src/adapter.ts`](packages/adapter-laravel/src/adapter.ts) for a full example.
 
@@ -137,17 +135,9 @@ You can write your own adapter by implementing the `TranslationAdapter` interfac
 dialekt is written in TypeScript on top of [Effect-TS](https://effect.website). Every file read, every API call, and every parse error is either handled or reported as a typed failure. Nothing gets swallowed in a `catch` block. The architecture is layered:
 
 - **CLI layer** (`@effect/cli`) — parses flags, resolves config files, wires up the runtime
-- **SDK layer** — the public API for custom scripts: `runTranslation`, `resolveModel`, strategies, chunking
+- **SDK layer** — the public API for custom scripts: `runTranslation`, `resolveModel`, chunking
 - **Adapter layer** — framework-specific I/O: reading locale files, writing them back, scanning source for unused keys
-- **Strategy layer** — the LLM interaction itself: prompt construction, response parsing, retry logic
-
-The monorepo is a pnpm workspace with three packages:
-
-| Package                      | What it exports                            |
-| ---------------------------- | ------------------------------------------ |
-| `dialekt`                    | CLI, SDK, translation engine, benchmarking |
-| `@dialekt/adapter-laravel`   | PHP array + JSON adapter                   |
-| `@dialekt/adapter-paraglide` | inlang JSON adapter                        |
+- **Translation layer** — the LLM interaction itself: prompt construction, response parsing, retry logic
 
 ## Examples
 
