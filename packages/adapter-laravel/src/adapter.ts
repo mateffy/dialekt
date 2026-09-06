@@ -79,7 +79,34 @@ function readLaravelResource(
  * Returns a locale-scoped reader that batches all PHP-file reads for a locale
  * into a single PHP process invocation. Subsequent reads hit the in-memory cache.
  */
-function makeBatchedReader(langDir: string) {
+type LocaleReader = (
+  locale: string,
+  resource: ResourceRef,
+) => Effect.Effect<
+  Record<string, string>,
+  AdapterReadError,
+  FileSystem.FileSystem | Path | CommandExecutor
+>;
+
+const readBatchWithFallback = (
+  absolutePaths: readonly string[],
+  locale: string,
+  resourceKey: string,
+): Effect.Effect<
+  Record<string, Record<string, unknown>>,
+  AdapterReadError,
+  FileSystem.FileSystem | Path | CommandExecutor
+> =>
+  absolutePaths.length > 0
+    ? readPhpArraysBatch(absolutePaths).pipe(
+        Effect.catchTag("PhpExecutionError", () =>
+          Effect.succeed({} as Record<string, Record<string, unknown>>),
+        ),
+        Effect.mapError((cause) => readError(locale, resourceKey, cause)),
+      )
+    : Effect.succeed({} as Record<string, Record<string, unknown>>);
+
+function makeBatchedReader(langDir: string): LocaleReader {
   // cache keyed by locale
   const caches = new Map<string, Ref.Ref<Record<string, Record<string, unknown>> | null>>();
 
@@ -112,7 +139,6 @@ function makeBatchedReader(langDir: string) {
       }
       const cacheRef = caches.get(locale)!;
 
-      // Check cache.
       const cached = yield* Ref.get(cacheRef);
       if (cached !== null && resource.key in cached) {
         return flattenObject(cached[resource.key]!);
@@ -123,15 +149,12 @@ function makeBatchedReader(langDir: string) {
       const phpResources = resources.filter((r) => r.key !== "json");
       const absolutePaths = phpResources.map((r) => path.join(langDir, locale, `${r.key}.php`));
 
-      const batchResult: Record<string, Record<string, unknown>> =
-        absolutePaths.length > 0
-          ? yield* readPhpArraysBatch(absolutePaths).pipe(
-              Effect.catchTag("PhpExecutionError", () => Effect.succeed({} as Record<string, Record<string, unknown>>)),
-              Effect.mapError((cause) => readError(locale, resource.key, cause)),
-            )
-          : {};
+      const batchResult: Record<string, Record<string, unknown>> = yield* readBatchWithFallback(
+        absolutePaths,
+        locale,
+        resource.key,
+      );
 
-      // Build a keyed-by-resource map.
       const byKey: Record<string, Record<string, unknown>> = {};
       for (const r of phpResources) {
         const fp = path.join(langDir, locale, `${r.key}.php`);
@@ -204,9 +227,11 @@ export function laravel(options: LaravelAdapterOptions): TranslationAdapter {
       listLaravelResources(langDir, locale).pipe(Effect.provide(NodePlatformLayer)),
 
     readResource: (locale, resource) =>
-      batchedRead(locale, resource).pipe(
-        Effect.provide([NodePlatformLayer]),
-      ) as Effect.Effect<Record<string, string>, AdapterReadError, never>,
+      batchedRead(locale, resource).pipe(Effect.provide([NodePlatformLayer])) as Effect.Effect<
+        Record<string, string>,
+        AdapterReadError,
+        never
+      >,
 
     writeResource: (locale, resource, entries) =>
       writeLaravelResource(langDir, locale, resource, entries).pipe(

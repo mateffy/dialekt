@@ -32,8 +32,8 @@ export function readPhpArraysBatch(
   if (absolutePaths.length === 0) return Effect.succeed({});
   return Effect.gen(function* () {
     const pathsJson = JSON.stringify(absolutePaths);
-    // Use double-quote string (not template literal) so $ signs are literal.
-    const batchScript = "$paths = json_decode($argv[1], true); $out = []; foreach ($paths as $p) { try { $v = require $p; } catch (\\Throwable $e) { $v = []; } $out[$p] = is_array($v) ? $v : []; } echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);";
+    const batchScript =
+      "$paths = json_decode($argv[1], true); $out = []; foreach ($paths as $p) { try { $v = require $p; } catch (\\Throwable $e) { $v = []; } $out[$p] = is_array($v) ? $v : []; } echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);";
     const cmd = Command.make("php", "-r", batchScript, "--", pathsJson);
     const output = yield* Command.string(cmd).pipe(
       Effect.mapError((cause) => new PhpExecutionError({ path: absolutePaths[0]!, cause })),

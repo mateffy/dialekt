@@ -215,7 +215,11 @@ describe("runMissing", () => {
       readResource: () => Effect.succeed({}),
       writeResource: () => Effect.void,
     };
-    const config = { ...baseConfig, targetLocales: null, adapters: [adapter] as unknown as DialektConfig["adapters"] };
+    const config = {
+      ...baseConfig,
+      targetLocales: null,
+      adapters: [adapter] as unknown as DialektConfig["adapters"],
+    };
 
     const program = runMissing(
       {

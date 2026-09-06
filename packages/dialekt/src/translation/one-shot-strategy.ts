@@ -49,8 +49,8 @@ function tryTranslateChunk(
       text: result.text ?? "",
       output,
       durationMs,
-      promptTokens: (result as any).usage?.promptTokens ?? (result as any).usage?.inputTokens ?? 0,
-      completionTokens: (result as any).usage?.completionTokens ?? (result as any).usage?.outputTokens ?? 0,
+      promptTokens: result.usage?.inputTokens ?? 0,
+      completionTokens: result.usage?.outputTokens ?? 0,
     } satisfies ChunkTrace);
     const missing = ctx.keys.filter((key: string) => !(key in output));
     if (missing.length > 0) {

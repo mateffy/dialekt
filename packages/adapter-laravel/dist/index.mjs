@@ -134,10 +134,7 @@ function readLaravelResource(langDir, locale, resource) {
 		return flattenObject(yield* readPhpArrayAsJson(path.join(langDir, locale, `${resource.key}.php`)).pipe(Effect.catchTag("PhpExecutionError", () => Effect.succeed({})), Effect.mapError((cause) => readError(locale, resource.key, cause))));
 	});
 }
-/**
-* Returns a locale-scoped reader that batches all PHP-file reads for a locale
-* into a single PHP process invocation. Subsequent reads hit the in-memory cache.
-*/
+const readBatchWithFallback = (absolutePaths, locale, resourceKey) => absolutePaths.length > 0 ? readPhpArraysBatch(absolutePaths).pipe(Effect.catchTag("PhpExecutionError", () => Effect.succeed({})), Effect.mapError((cause) => readError(locale, resourceKey, cause))) : Effect.succeed({});
 function makeBatchedReader(langDir) {
 	const caches = /* @__PURE__ */ new Map();
 	return (locale, resource) => Effect.gen(function* () {
@@ -155,8 +152,7 @@ function makeBatchedReader(langDir) {
 		const cached = yield* Ref.get(cacheRef);
 		if (cached !== null && resource.key in cached) return flattenObject(cached[resource.key]);
 		const phpResources = (yield* listLaravelResources(langDir, locale)).filter((r) => r.key !== "json");
-		const absolutePaths = phpResources.map((r) => path.join(langDir, locale, `${r.key}.php`));
-		const batchResult = absolutePaths.length > 0 ? yield* readPhpArraysBatch(absolutePaths).pipe(Effect.catchTag("PhpExecutionError", () => Effect.succeed({})), Effect.mapError((cause) => readError(locale, resource.key, cause))) : {};
+		const batchResult = yield* readBatchWithFallback(phpResources.map((r) => path.join(langDir, locale, `${r.key}.php`)), locale, resource.key);
 		const byKey = {};
 		for (const r of phpResources) {
 			const fp = path.join(langDir, locale, `${r.key}.php`);

@@ -44,7 +44,7 @@ function tryTranslateChunk(
     }
     const result: Record<string, string> = captured;
 
-    onTrace?.(({
+    onTrace?.({
       sourceLocale: ctx.sourceLocale,
       targetLocale: ctx.targetLocale,
       keys: ctx.keys,
@@ -55,7 +55,7 @@ function tryTranslateChunk(
       promptTokens: 0,
       completionTokens: 0,
       ...(ctx.resource !== undefined ? { resource: ctx.resource } : {}),
-    }) satisfies ChunkTrace);
+    } satisfies ChunkTrace);
 
     const missing = ctx.keys.filter((key: string) => !(key in result));
     if (missing.length > 0) {

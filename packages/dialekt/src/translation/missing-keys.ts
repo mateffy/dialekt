@@ -9,6 +9,35 @@ export interface MissingKeyEntry {
   readonly missing: readonly string[];
 }
 
+function missingForLocale(
+  adapter: TranslationAdapter,
+  sourceMap: Record<string, string>,
+  locale: string,
+  resource: ResourceRef,
+): Effect.Effect<readonly MissingKeyEntry[], AdapterReadError> {
+  return Effect.gen(function* () {
+    const targetMap = yield* adapter.readResource(locale, resource);
+    const missing = diffKeys(sourceMap, targetMap);
+    return missing.length > 0 ? [{ adapter: adapter.name, locale, resource, missing }] : [];
+  });
+}
+
+function missingForResource(
+  adapter: TranslationAdapter,
+  sourceLocale: string,
+  targetLocales: readonly string[],
+  resource: ResourceRef,
+): Effect.Effect<readonly MissingKeyEntry[], AdapterReadError> {
+  return Effect.gen(function* () {
+    const sourceMap = yield* adapter.readResource(sourceLocale, resource);
+    return yield* Effect.forEach(
+      targetLocales,
+      (locale) => missingForLocale(adapter, sourceMap, locale, resource),
+      { concurrency: targetLocales.length },
+    ).pipe(Effect.map((xs) => xs.flat()));
+  });
+}
+
 export function computeMissingKeys(
   adapter: TranslationAdapter,
   sourceLocale: string,
@@ -16,28 +45,11 @@ export function computeMissingKeys(
 ): Effect.Effect<readonly MissingKeyEntry[], AdapterReadError> {
   return Effect.gen(function* () {
     const resources = yield* adapter.listResources(sourceLocale);
-
-    // Read source resources concurrently, then target resources concurrently.
-    // This parallelises PHP process spawns — the biggest bottleneck.
-    const entries = yield* Effect.forEach(resources, (resource: ResourceRef) =>
-      Effect.gen(function* () {
-        const sourceMap = yield* adapter.readResource(sourceLocale, resource);
-        const localeEntries = yield* Effect.forEach(
-          targetLocales,
-          (locale: string) =>
-            Effect.gen(function* () {
-              const targetMap = yield* adapter.readResource(locale, resource);
-              const missing = diffKeys(sourceMap, targetMap);
-              return missing.length > 0
-                ? [{ adapter: adapter.name, locale, resource, missing }]
-                : [];
-            }),
-          { concurrency: targetLocales.length },
-        );
-        return localeEntries.flat();
-      }),
-      { concurrency: Math.min(resources.length, 10) },
-    );
-    return entries.flat();
+    const maxConcurrency = Math.min(resources.length, 10);
+    return yield* Effect.forEach(
+      resources,
+      (resource) => missingForResource(adapter, sourceLocale, targetLocales, resource),
+      { concurrency: maxConcurrency },
+    ).pipe(Effect.map((xs) => xs.flat()));
   });
 }

@@ -54,6 +54,16 @@ export interface BenchmarkDeps {
   readonly errorLogger: (msg: string) => Effect.Effect<void>;
 }
 
+const resolveKeysPerChunk = (
+  flags: BenchmarkFlags,
+  chunking: { readonly keysPerChunk?: number },
+): { readonly keysPerChunk?: number } => {
+  const fromFlag = Option.getOrUndefined(flags.chunkSize ?? Option.none());
+  if (fromFlag !== undefined) return { keysPerChunk: fromFlag };
+  if (chunking.keysPerChunk !== undefined) return { keysPerChunk: chunking.keysPerChunk };
+  return {};
+};
+
 export function runBenchmarkCommand(
   flags: BenchmarkFlags,
   deps: BenchmarkDeps,
@@ -105,11 +115,7 @@ export function runBenchmarkCommand(
         const chunks = chunkKeys(entry.missing, sourceMap, targetMap, {
           maxTokens: effective.chunking.maxTokens,
           charsPerToken: effective.chunking.charsPerToken,
-          ...(Option.getOrUndefined(flags.chunkSize ?? Option.none()) !== undefined
-            ? { keysPerChunk: Option.getOrUndefined(flags.chunkSize ?? Option.none())! }
-            : effective.chunking.keysPerChunk !== undefined
-              ? { keysPerChunk: effective.chunking.keysPerChunk }
-              : {}),
+          ...resolveKeysPerChunk(flags, effective.chunking),
         });
         for (const keys of chunks) {
           allChunks.push({

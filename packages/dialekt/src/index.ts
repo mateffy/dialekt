@@ -9,7 +9,11 @@ export { IcuParseError } from "./icu/index.js";
 export { chunkKeys } from "./translation/chunking.js";
 export { NodePlatformLayer } from "./sdk/node-layer.js";
 export { readFileIfExists, writeFileEnsuringDir } from "./sdk/file-io.js";
-export { readPhpArrayAsJson, readPhpArraysBatch, PhpExecutionError } from "./sdk/php-array-reader.js";
+export {
+  readPhpArrayAsJson,
+  readPhpArraysBatch,
+  PhpExecutionError,
+} from "./sdk/php-array-reader.js";
 export { resolveModel, UnknownProviderError } from "./translation/model-registry.js";
 export type { TranslationContext, TranslationStrategy } from "./translation/types.js";
 export { TranslationFailedError } from "./translation/types.js";

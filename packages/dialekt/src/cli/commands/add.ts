@@ -55,7 +55,9 @@ export function runAdd(
   flags: AddFlags,
   tokens: readonly string[],
   configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
-  modelResolver: (config: ModelConfig) => Effect.Effect<unknown, unknown> = resolveModel as (config: ModelConfig) => Effect.Effect<unknown, unknown>,
+  modelResolver: (config: ModelConfig) => Effect.Effect<unknown, unknown> = resolveModel as (
+    config: ModelConfig,
+  ) => Effect.Effect<unknown, unknown>,
   translationRunner: (opts: TranslationRunConfig) => Effect.Effect<void, unknown> = runTranslation,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
   errorLogger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.error(msg),

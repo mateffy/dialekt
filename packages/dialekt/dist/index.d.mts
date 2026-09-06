@@ -74,15 +74,10 @@ declare const UnknownProviderError_base: new <A extends Record<string, any> = {}
 declare class UnknownProviderError extends UnknownProviderError_base<{
   readonly provider: string;
 }> {}
-/** A model spec: either a live Vercel AI SDK model, or a provider+id pair. */
 type ModelConfig = LanguageModel | {
   readonly provider: string;
   readonly modelId: string;
 };
-/**
- * The one file in the entire codebase allowed to import AI SDK provider packages.
- * Accepts both { provider, modelId } specs and live LanguageModel instances.
- */
 declare function resolveModel(config: ModelConfig): Effect.Effect<LanguageModel, UnknownProviderError>;
 //#endregion
 //#region src/config/types.d.ts

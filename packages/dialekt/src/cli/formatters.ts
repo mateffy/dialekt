@@ -264,23 +264,37 @@ export function formatTranslate(result: TranslateResult, format: OutputFormat): 
         const cs = result.stats.chunkStats;
         lines.push("");
         lines.push(D + "  chunks  total time     avg    min    max" + W);
-        const time = (cs.avgDurationMs * cs.chunkCount);
-        lines.push(`  ${cs.chunkCount.toString().padEnd(7)} ${formatMs(time).padEnd(13)} ${formatMs(cs.avgDurationMs).padEnd(6)} ${formatMs(cs.minDurationMs).padEnd(6)} ${formatMs(cs.maxDurationMs)}`);
+        const time = cs.avgDurationMs * cs.chunkCount;
+        {
+          lines.push(
+            `  ${cs.chunkCount.toString().padEnd(CHUNKS_COL_WIDTH)} ${formatMs(time).padEnd(TIME_COL_WIDTH)} ${formatMs(cs.avgDurationMs).padEnd(STAT_COL_WIDTH)} ${formatMs(cs.minDurationMs).padEnd(STAT_COL_WIDTH)} ${formatMs(cs.maxDurationMs)}`,
+          );
+        }
         lines.push("");
         lines.push(D + "  tokens           count" + W);
         lines.push(`  prompt           ${cs.totalPromptTokens.toLocaleString()}`);
         lines.push(`  completion       ${cs.totalCompletionTokens.toLocaleString()}`);
-        lines.push(`  total            ${(cs.totalPromptTokens + cs.totalCompletionTokens).toLocaleString()}`);
+        lines.push(
+          `  total            ${(cs.totalPromptTokens + cs.totalCompletionTokens).toLocaleString()}`,
+        );
         lines.push("");
-        lines.push(keyValue("Est. cost:", `$${cs.estimatedCostUsd.toFixed(4)}`));
+        {
+          const COST_DECIMAL_PLACES = 4;
+          lines.push(
+            keyValue("Est. cost:", `$${cs.estimatedCostUsd.toFixed(COST_DECIMAL_PLACES)}`),
+          );
+        }
       }
       if (result.stats.perLocale) {
         lines.push("");
         lines.push(D + "  locale       translated  remaining" + W);
-        for (const [loc, { translated, remaining }] of Object.entries(result.stats.perLocale).sort()) {
+        for (const [loc, { translated, remaining }] of Object.entries(
+          result.stats.perLocale,
+        ).sort()) {
           const t = translated > 0 ? C.green + String(translated) + W : D + "—" + W;
           const r = remaining > 0 ? C.yellow + String(remaining) + W : C.green + "0" + W;
-          lines.push(`  ${padEnd(loc, 12)} ${t}        ${r}`);
+          const COL_LOCALE = 12;
+          lines.push(`  ${padEnd(loc, COL_LOCALE)} ${t}        ${r}`);
         }
       }
     }
@@ -291,10 +305,17 @@ export function formatTranslate(result: TranslateResult, format: OutputFormat): 
 }
 
 function formatMs(ms: number): string {
-  if (ms >= 60000) return (ms / 60000).toFixed(1) + "m";
-  if (ms >= 1000) return (ms / 1000).toFixed(1) + "s";
+  const MS_PER_MINUTE = 60_000;
+  const MS_PER_SECOND = 1000;
+  if (ms >= MS_PER_MINUTE) return (ms / MS_PER_MINUTE).toFixed(1) + "m";
+  if (ms >= MS_PER_SECOND) return (ms / MS_PER_SECOND).toFixed(1) + "s";
   return Math.round(ms) + "ms";
 }
+
+// Column widths for chunk stat table.
+const CHUNKS_COL_WIDTH = 7;
+const TIME_COL_WIDTH = 13;
+const STAT_COL_WIDTH = 6;
 
 // ─── Add formatter ───────────────────────────────────────────────────────────
 

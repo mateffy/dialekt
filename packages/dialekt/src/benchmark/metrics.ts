@@ -27,8 +27,8 @@ export interface StrategyBenchmarkSummary {
 }
 
 // OpenRouter DeepSeek v4 Flash pricing per 1M tokens
-const DEEPSEEK_INPUT_PRICE = 0.40;   // $0.40 per 1M input tokens
-const DEEPSEEK_OUTPUT_PRICE = 0.60;  // $0.60 per 1M output tokens
+const DEEPSEEK_INPUT_PRICE = 0.4; // $0.40 per 1M input tokens
+const DEEPSEEK_OUTPUT_PRICE = 0.6; // $0.60 per 1M output tokens
 
 export function summarizeBenchmarkResults(
   results: readonly ChunkBenchmarkResult[],
@@ -86,7 +86,9 @@ export function runBenchmarkedChunk(
         attemptCount: 1,
         succeeded: true as const,
         errorMessage: undefined,
-        ...(usage.promptTokens > 0 ? { promptTokens: usage.promptTokens, completionTokens: usage.completionTokens } : {}),
+        ...(usage.promptTokens > 0
+          ? { promptTokens: usage.promptTokens, completionTokens: usage.completionTokens }
+          : {}),
       };
     }
     return {
@@ -96,7 +98,9 @@ export function runBenchmarkedChunk(
       attemptCount: 1,
       succeeded: false as const,
       errorMessage: String((result.left as { cause?: unknown }).cause),
-      ...(usage.promptTokens > 0 ? { promptTokens: usage.promptTokens, completionTokens: usage.completionTokens } : {}),
+      ...(usage.promptTokens > 0
+        ? { promptTokens: usage.promptTokens, completionTokens: usage.completionTokens }
+        : {}),
     };
   });
 }

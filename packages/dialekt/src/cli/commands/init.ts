@@ -107,10 +107,7 @@ export function installCommand(
   return PlatformCommand.make(pm, ...args);
 }
 
-export function installCommandString(
-  pm: PackageManager,
-  packages: ReadonlyArray<string>,
-): string {
+export function installCommandString(pm: PackageManager, packages: ReadonlyArray<string>): string {
   const pkgList = packages.join(" ");
   switch (pm) {
     case "pnpm":
@@ -206,9 +203,9 @@ export function runInit(
   });
 }
 
-const pmOption = Options.optional(
-  Options.choice("pm", ["npm", "pnpm", "bun"] as const),
-).pipe(Options.withDescription("Package manager to use for installing dependencies (npm, pnpm, bun)"));
+const pmOption = Options.optional(Options.choice("pm", ["npm", "pnpm", "bun"] as const)).pipe(
+  Options.withDescription("Package manager to use for installing dependencies (npm, pnpm, bun)"),
+);
 
 export const initCommand = Command.make(
   "init",

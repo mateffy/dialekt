@@ -15,7 +15,12 @@ describe("defineConfig", () => {
       adapters: [],
     };
     const result = defineConfig(config);
-    expect(result.chunking).toEqual({ maxTokens: 3000, charsPerToken: 3.0, concurrency: 3, keysPerChunk: 10 });
+    expect(result.chunking).toEqual({
+      maxTokens: 3000,
+      charsPerToken: 3.0,
+      concurrency: 3,
+      keysPerChunk: 10,
+    });
     expect(result.retry).toEqual({ maxAttempts: 3, baseDelayMs: 1000 });
   });
 

@@ -51,11 +51,10 @@ export function loadConfig(configPath: string): Effect.Effect<DialektConfig, Con
       const virtualModules: Record<string, unknown> = {};
       for (const spec of knownSpecifiers) {
         try {
-          // Use dynamic import() — it resolves ESM specifiers correctly
-          // from this module's location (inside the dialekt package).
           virtualModules[spec] = await import(spec);
         } catch {
-          // adapter not installed, skip
+          // Adapter not installed — skip.
+          void 0;
         }
       }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-vHGsz_IO.mjs";
+import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-QGjIbJBA.mjs";
 import { Console, Effect, Option } from "effect";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command, FileSystem } from "@effect/platform";
@@ -33,6 +33,10 @@ const GREEN = "\x1B[32m";
 const CYAN = "\x1B[36m";
 const RED = "\x1B[31m";
 const RESET = "\x1B[0m";
+const COL_LOCALE = 9;
+const COL_KEYS = 9;
+const COL_CHUNKS = 8;
+const COL_PROGRESS = 9;
 var ProgressDisplay = class {
 	rows = /* @__PURE__ */ new Map();
 	order;
@@ -124,6 +128,12 @@ var ProgressDisplay = class {
 		this.draw();
 		this.fd.write("\n");
 	}
+	progressStr(row) {
+		if (row.status === "no-missing") return "\x1B[32m—\x1B[0m";
+		if (row.chunks === 0 && row.status === "done") return "\x1B[32m—\x1B[0m";
+		if (row.status === "pending") return "\x1B[2m···\x1B[0m";
+		return `${row.completed + row.failed}/${row.chunks}`;
+	}
 	draw() {
 		if (this.drawn > 0) for (let i = 0; i < this.drawn; i++) this.fd.write("\x1B[1A\x1B[K");
 		this.drawn = 0;
@@ -132,7 +142,7 @@ var ProgressDisplay = class {
 			const s = row.status === "translating" ? SPINNER[this.frame % SPINNER.length] + " " : row.status === "pending" ? "\x1B[2m··\x1B[0m " : "  ";
 			const keysStr = row.keys > 0 ? String(row.keys) : "\x1B[2m···\x1B[0m";
 			const chunksStr = row.chunks > 0 ? String(row.chunks) : "\x1B[2m···\x1B[0m";
-			const progressStr = row.status === "no-missing" ? "\x1B[32m—\x1B[0m" : row.chunks === 0 && row.status === "done" ? "\x1B[32m—\x1B[0m" : row.status === "pending" ? "\x1B[2m···\x1B[0m" : `${row.completed + row.failed}/${row.chunks}`;
+			const progressStr = this.progressStr(row);
 			let statusStr;
 			switch (row.status) {
 				case "pending":
@@ -151,13 +161,13 @@ var ProgressDisplay = class {
 					statusStr = row.failed > 0 ? `${RED}✗${RESET} ${row.failed} failed` : `${RED}✗${RESET} error`;
 					break;
 			}
-			this.fd.write(`\r${s}${pad(row.locale, 9)} ${pad(keysStr, 9)} ${pad(chunksStr, 8)} ${pad(progressStr, 9)} ${statusStr}\n`);
+			this.fd.write(`\r${s}${pad(row.locale, COL_LOCALE)} ${pad(keysStr, COL_KEYS)} ${pad(chunksStr, COL_CHUNKS)} ${pad(progressStr, COL_PROGRESS)} ${statusStr}\n`);
 			this.drawn++;
 		}
 	}
 };
 function pad(s, n) {
-	const plain = s.replace(/\x1b\[[0-9;]*m/g, "");
+	const plain = s.replace(/\x1b\[\d;]*m/g, "");
 	const padLen = Math.max(0, n - plain.length);
 	return s + " ".repeat(padLen);
 }
@@ -248,6 +258,21 @@ const C = "\x1B[36m";
 const Y = "\x1B[33m";
 const B = "\x1B[1m";
 const W = "\x1B[0m";
+function renderTraceToStderr(trace) {
+	const { sourceLocale: sl, targetLocale: tl, resource, keys, sourceTexts, output } = trace;
+	const TRUNCATE = 140;
+	const out = process.stderr;
+	const resLabel = resource ? D + resource + "\x1B[0m  " : "";
+	out.write(`\n${D}┌${W} ${resLabel}${B}${keys.length} keys${W}  ${Y}${sl}${W} ${D}→${W} ${C}${tl}${W}\n${D}│${W}\n`);
+	for (const key of keys) {
+		if (!output[key] && !sourceTexts[key]) continue;
+		out.write(`${D}│${W} ${C}${key}${W}\n`);
+		out.write(`${D}│${W}  ${D}de${W}  ${(sourceTexts[key] ?? "").slice(0, TRUNCATE)}\n`);
+		out.write(`${D}│${W}  ${G}${tl}${W}  ${(output[key] ?? "\x1B[2m(missing)\x1B[0m").slice(0, TRUNCATE)}\n`);
+		out.write(`${D}│${W}\n`);
+	}
+	out.write(`${D}└${W}\n`);
+}
 function shouldShowProgress(flags) {
 	if (!process.stdout.isTTY) return false;
 	if (!flags.quiet) return false;
@@ -259,6 +284,7 @@ function emitChunk(trace, chunkNum, total, bar) {
 	const counter = `${G}${chunkNum}/${total}${W}`;
 	const locPair = `${Y}${sourceLocale}${W} ${D}→${W} ${C}${targetLocale}${W}`;
 	const res = resource ? `${D}${resource}${W}  ` : "";
+	const TRUNCATE = 140;
 	const lines = [];
 	lines.push(`\n${D}┌${W} ${res}${B}${keys.length} keys${W}  ${locPair}  ${D}[${W}${counter}${D}]${W}`);
 	lines.push(`${D}│${W}`);
@@ -266,8 +292,8 @@ function emitChunk(trace, chunkNum, total, bar) {
 		const src = sourceTexts[key] ?? "";
 		const tgt = output[key] ?? "\x1B[2m(missing)\x1B[0m";
 		lines.push(`${D}│${W} ${C}${key}${W}`);
-		lines.push(`${D}│${W}  ${D}de${W}  ${src.slice(0, 140)}`);
-		lines.push(`${D}│${W}  ${G}${targetLocale}${W}  ${tgt.slice(0, 140)}`);
+		lines.push(`${D}│${W}  ${D}de${W}  ${src.slice(0, TRUNCATE)}`);
+		lines.push(`${D}│${W}  ${G}${targetLocale}${W}  ${tgt.slice(0, TRUNCATE)}`);
 		lines.push(`${D}│${W}`);
 	}
 	lines.push(`${D}└${W}`);
@@ -275,6 +301,8 @@ function emitChunk(trace, chunkNum, total, bar) {
 	process.stderr.write(lines.join("\n") + "\n\n");
 	bar.afterOutput();
 }
+const ROUND_TO_4_DP = 1e4;
+const roundCost = (costUsd) => Math.round(costUsd * ROUND_TO_4_DP) / ROUND_TO_4_DP;
 const DEEPSEEK_INPUT_PER_1M = .4;
 const DEEPSEEK_OUTPUT_PER_1M = .6;
 function runTranslate(flags, configLoader = loadConfig, modelResolver = resolveModel, translationRunner = runTranslation, logger = (msg) => Console.log(msg)) {
@@ -339,19 +367,7 @@ function runTranslate(flags, configLoader = loadConfig, modelResolver = resolveM
 			cstats.minDurationMs = Math.min(cstats.minDurationMs, trace.durationMs);
 			cstats.maxDurationMs = Math.max(cstats.maxDurationMs, trace.durationMs);
 			if (bar) emitChunk(trace, idx, tot, bar);
-			else {
-				const { sourceLocale: sl, targetLocale: tl, resource, keys, sourceTexts, output } = trace;
-				const out = process.stderr;
-				out.write(`\n${D}┌${W} ${resource ? D + resource + "\x1B[0m  " : ""}${B}${keys.length} keys${W}  ${Y}${sl}${W} ${D}→${W} ${C}${tl}${W}\n${D}│${W}\n`);
-				for (const key of keys) {
-					if (!output[key] && !sourceTexts[key]) continue;
-					out.write(`${D}│${W} ${C}${key}${W}\n`);
-					out.write(`${D}│${W}  ${D}de${W}  ${(sourceTexts[key] ?? "").slice(0, 140)}\n`);
-					out.write(`${D}│${W}  ${G}${tl}${W}  ${(output[key] ?? "\x1B[2m(missing)\x1B[0m").slice(0, 140)}\n`);
-					out.write(`${D}│${W}\n`);
-				}
-				out.write(`${D}└${W}\n`);
-			}
+			else renderTraceToStderr(trace);
 		} : void 0;
 		const strategy = effective.strategy === "tool-loop-agent" ? createToolLoopStrategy({
 			model,
@@ -424,7 +440,7 @@ function runTranslate(flags, configLoader = loadConfig, modelResolver = resolveM
 			maxDurationMs: cstats.maxDurationMs,
 			totalPromptTokens: cstats.totalPromptTokens,
 			totalCompletionTokens: cstats.totalCompletionTokens,
-			estimatedCostUsd: Math.round(costUsd * 1e4) / 1e4
+			estimatedCostUsd: roundCost(costUsd)
 		} : void 0;
 		yield* logger(formatTranslate({
 			success: true,
@@ -744,6 +760,12 @@ function runBenchmark(config) {
 }
 //#endregion
 //#region src/cli/commands/benchmark.ts
+const resolveKeysPerChunk = (flags, chunking) => {
+	const fromFlag = Option.getOrUndefined(flags.chunkSize ?? Option.none());
+	if (fromFlag !== void 0) return { keysPerChunk: fromFlag };
+	if (chunking.keysPerChunk !== void 0) return { keysPerChunk: chunking.keysPerChunk };
+	return {};
+};
 function runBenchmarkCommand(flags, deps) {
 	return Effect.gen(function* () {
 		yield* deps.errorLogger(formatError("Warning: This will make real API calls to the configured model provider(s) and may incur cost.", detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
@@ -770,7 +792,7 @@ function runBenchmarkCommand(flags, deps) {
 				const chunks = chunkKeys(entry.missing, sourceMap, targetMap, {
 					maxTokens: effective.chunking.maxTokens,
 					charsPerToken: effective.chunking.charsPerToken,
-					...Option.getOrUndefined(flags.chunkSize ?? Option.none()) !== void 0 ? { keysPerChunk: Option.getOrUndefined(flags.chunkSize ?? Option.none()) } : effective.chunking.keysPerChunk !== void 0 ? { keysPerChunk: effective.chunking.keysPerChunk } : {}
+					...resolveKeysPerChunk(flags, effective.chunking)
 				});
 				for (const keys of chunks) allChunks.push({
 					sourceLocale,

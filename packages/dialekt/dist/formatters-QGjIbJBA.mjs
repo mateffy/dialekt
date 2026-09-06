@@ -117,43 +117,49 @@ function writeFileEnsuringDir(path, content) {
 //#region src/translation/model-registry.ts
 var UnknownProviderError = class extends Data.TaggedError("UnknownProviderError") {};
 function isLanguageModel(v) {
-	return typeof v.doGenerate === "function" || typeof v.specificationVersion !== "undefined";
+	const m = v;
+	return typeof m["doGenerate"] === "function" || typeof m["specificationVersion"] !== "undefined";
 }
-/**
-* The one file in the entire codebase allowed to import AI SDK provider packages.
-* Accepts both { provider, modelId } specs and live LanguageModel instances.
-*/
+const VALID_PROVIDERS = /* @__PURE__ */ new Set([
+	"openai",
+	"openrouter",
+	"anthropic",
+	"google"
+]);
+function loadProviderModel(provider, modelId) {
+	return Effect.tryPromise({
+		try: async () => {
+			switch (provider) {
+				case "openai": {
+					const { openai } = await import("@ai-sdk/openai");
+					return openai(modelId);
+				}
+				case "openrouter": {
+					const { createOpenAI } = await import("@ai-sdk/openai");
+					return createOpenAI({
+						baseURL: "https://openrouter.ai/api/v1",
+						apiKey: process.env.OPENROUTER_API_KEY ?? ""
+					})(modelId);
+				}
+				case "anthropic": {
+					const { anthropic } = await import("@ai-sdk/anthropic");
+					return anthropic(modelId);
+				}
+				case "google": {
+					const { google } = await import("@ai-sdk/google");
+					return google(modelId);
+				}
+			}
+		},
+		catch: (cause) => cause instanceof UnknownProviderError ? cause : new UnknownProviderError({ provider })
+	});
+}
 function resolveModel(config) {
 	return Effect.gen(function* () {
 		if (isLanguageModel(config)) return config;
 		const { provider, modelId } = config;
-		return yield* Effect.tryPromise({
-			try: async () => {
-				switch (provider) {
-					case "openai": {
-						const { openai } = await import("@ai-sdk/openai");
-						return openai(modelId);
-					}
-					case "openrouter": {
-						const { createOpenAI } = await import("@ai-sdk/openai");
-						return createOpenAI({
-							baseURL: "https://openrouter.ai/api/v1",
-							apiKey: process.env.OPENROUTER_API_KEY ?? ""
-						})(modelId);
-					}
-					case "anthropic": {
-						const { anthropic } = await import("@ai-sdk/anthropic");
-						return anthropic(modelId);
-					}
-					case "google": {
-						const { google } = await import("@ai-sdk/google");
-						return google(modelId);
-					}
-					default: throw new UnknownProviderError({ provider });
-				}
-			},
-			catch: (cause) => cause instanceof UnknownProviderError ? cause : new UnknownProviderError({ provider })
-		});
+		if (!VALID_PROVIDERS.has(provider)) return yield* Effect.fail(new UnknownProviderError({ provider }));
+		return yield* loadProviderModel(provider, modelId);
 	});
 }
 //#endregion
@@ -222,8 +228,8 @@ function tryTranslateChunk$1(model, ctx, onTrace) {
 			text: result.text ?? "",
 			output,
 			durationMs,
-			promptTokens: result.usage?.promptTokens ?? result.usage?.inputTokens ?? 0,
-			completionTokens: result.usage?.completionTokens ?? result.usage?.outputTokens ?? 0
+			promptTokens: result.usage?.inputTokens ?? 0,
+			completionTokens: result.usage?.outputTokens ?? 0
 		});
 		const missing = ctx.keys.filter((key) => !(key in output));
 		if (missing.length > 0) return yield* Effect.fail(/* @__PURE__ */ new Error(`Model omitted keys: ${missing.join(", ")}`));
@@ -295,8 +301,7 @@ function createToolLoopStrategy(deps) {
 //#region src/translation/orchestrator.ts
 /**
 * Translate missing keys in one resource file. Chunks translate serially within
-* a resource so we can write after each chunk (resumability). Different resources
-* run in parallel since they write to different files.
+* a resource so we can write after each chunk (resumability).
 */
 function translateResource(adapter, strategy, chunking, sourceLocale, targetLocale, resource, failures, onProgress) {
 	return Effect.gen(function* () {
@@ -348,6 +353,67 @@ function translateResource(adapter, strategy, chunking, sourceLocale, targetLoca
 		}
 	});
 }
+/** Translate all resources for one locale in parallel, tracking per-chunk progress. */
+function translateLocale(adapter, strategy, chunking, sourceLocale, locale, resources, failures, onProgress) {
+	return Effect.gen(function* () {
+		onProgress?.({
+			type: "locale-start",
+			locale,
+			resourcesTotal: resources.length
+		});
+		let chOk = 0;
+		let chFail = 0;
+		const chunkCfg = {
+			maxTokens: chunking.maxTokens,
+			charsPerToken: chunking.charsPerToken,
+			...chunking.keysPerChunk !== void 0 ? { keysPerChunk: chunking.keysPerChunk } : {}
+		};
+		if ((yield* Effect.forEach(resources, (res) => translateResource(adapter, strategy, chunkCfg, sourceLocale, locale, res, failures, (e) => {
+			if (e.type === "chunk-complete") chOk++;
+			else if (e.type === "chunk-fail") chFail++;
+			onProgress?.(e);
+		}).pipe(Effect.either), {
+			concurrency: chunking.concurrency,
+			discard: false
+		})).some((r) => r._tag === "Left") || chFail > 0) onProgress?.({
+			type: "locale-error",
+			locale
+		});
+		else onProgress?.({
+			type: "locale-done",
+			locale
+		});
+	});
+}
+/** Pre-scan a locale: count missing keys, compute chunk count. */
+function preScanLocale(adapter, sourceLocale, locale, chunking, resourceFilter) {
+	return Effect.gen(function* () {
+		const allRes = yield* adapter.listResources(sourceLocale);
+		const filtered = resourceFilter ? allRes.filter((r) => r.key === resourceFilter || r.label === resourceFilter || r.key.startsWith(resourceFilter)) : allRes;
+		let missingKeys = 0;
+		let chunksTotal = 0;
+		for (const resource of filtered) {
+			const srcMap = yield* adapter.readResource(sourceLocale, resource);
+			const tgtMap = yield* adapter.readResource(locale, resource);
+			const missing = diffKeys(srcMap, tgtMap);
+			missingKeys += missing.length;
+			if (missing.length > 0) {
+				const cfg = {
+					maxTokens: chunking.maxTokens,
+					charsPerToken: chunking.charsPerToken,
+					...chunking.keysPerChunk !== void 0 ? { keysPerChunk: chunking.keysPerChunk } : {}
+				};
+				chunksTotal += chunkKeys(missing, srcMap, tgtMap, cfg).length;
+			}
+		}
+		return {
+			locale,
+			resources: filtered,
+			missingKeys,
+			chunksTotal
+		};
+	});
+}
 function runTranslation(config, onProgress) {
 	return Effect.gen(function* () {
 		const failures = [];
@@ -356,65 +422,14 @@ function runTranslation(config, onProgress) {
 			const sourceLocale = config.sourceLocale;
 			let targetLocales = config.targetLocales.length > 0 ? config.targetLocales.filter((l) => l !== sourceLocale) : allLocales.filter((l) => l !== sourceLocale);
 			if (targetLocales.length === 0) targetLocales = allLocales.filter((l) => l !== sourceLocale);
-			const localeJobs = [];
-			for (const locale of targetLocales) {
-				const allRes = yield* adapter.listResources(sourceLocale);
-				const filtered = config.resourceFilter ? allRes.filter((r) => r.key === config.resourceFilter || r.label === config.resourceFilter || r.key.startsWith(config.resourceFilter)) : allRes;
-				let totalMissing = 0;
-				let totalChunks = 0;
-				for (const resource of filtered) {
-					const srcMap = yield* adapter.readResource(sourceLocale, resource);
-					const tgtMap = yield* adapter.readResource(locale, resource);
-					const missing = diffKeys(srcMap, tgtMap);
-					totalMissing += missing.length;
-					if (missing.length > 0) {
-						const c = chunkKeys(missing, srcMap, tgtMap, {
-							maxTokens: config.chunking.maxTokens,
-							charsPerToken: config.chunking.charsPerToken,
-							...config.chunking.keysPerChunk !== void 0 ? { keysPerChunk: config.chunking.keysPerChunk } : {}
-						});
-						totalChunks += c.length;
-					}
-				}
-				onProgress?.({
-					type: "locale-scanned",
-					locale,
-					missingKeys: totalMissing,
-					chunksTotal: totalChunks
-				});
-				localeJobs.push({
-					locale,
-					resources: [...filtered]
-				});
-			}
-			yield* Effect.forEach(localeJobs, ({ locale, resources }) => Effect.gen(function* () {
-				onProgress?.({
-					type: "locale-start",
-					locale,
-					resourcesTotal: resources.length
-				});
-				let chOk = 0;
-				let chFail = 0;
-				if ((yield* Effect.forEach(resources, (res) => translateResource(adapter, config.strategy, {
-					maxTokens: config.chunking.maxTokens,
-					charsPerToken: config.chunking.charsPerToken,
-					...config.chunking.keysPerChunk !== void 0 ? { keysPerChunk: config.chunking.keysPerChunk } : {}
-				}, sourceLocale, locale, res, failures, (e) => {
-					if (e.type === "chunk-complete") chOk++;
-					else if (e.type === "chunk-fail") chFail++;
-					onProgress?.(e);
-				}).pipe(Effect.either), {
-					concurrency: config.chunking.concurrency,
-					discard: false
-				})).some((r) => r._tag === "Left") || chFail > 0) onProgress?.({
-					type: "locale-error",
-					locale
-				});
-				else onProgress?.({
-					type: "locale-done",
-					locale
-				});
-			}), { concurrency: config.chunking.concurrency });
+			const localeJobs = yield* Effect.forEach(targetLocales, (locale) => preScanLocale(adapter, sourceLocale, locale, config.chunking, config.resourceFilter), { concurrency: Math.min(targetLocales.length, config.chunking.concurrency) });
+			for (const job of localeJobs) onProgress?.({
+				type: "locale-scanned",
+				locale: job.locale,
+				missingKeys: job.missingKeys,
+				chunksTotal: job.chunksTotal
+			});
+			yield* Effect.forEach(localeJobs, ({ locale, resources }) => translateLocale(adapter, config.strategy, config.chunking, sourceLocale, locale, resources, failures, onProgress), { concurrency: config.chunking.concurrency });
 		}
 		if (failures.length > 0) return yield* Effect.fail(new TranslationFailedError({
 			keys: failures.flatMap((f) => [...f.keys]),
@@ -424,21 +439,28 @@ function runTranslation(config, onProgress) {
 }
 //#endregion
 //#region src/translation/missing-keys.ts
+function missingForLocale(adapter, sourceMap, locale, resource) {
+	return Effect.gen(function* () {
+		const missing = diffKeys(sourceMap, yield* adapter.readResource(locale, resource));
+		return missing.length > 0 ? [{
+			adapter: adapter.name,
+			locale,
+			resource,
+			missing
+		}] : [];
+	});
+}
+function missingForResource(adapter, sourceLocale, targetLocales, resource) {
+	return Effect.gen(function* () {
+		const sourceMap = yield* adapter.readResource(sourceLocale, resource);
+		return yield* Effect.forEach(targetLocales, (locale) => missingForLocale(adapter, sourceMap, locale, resource), { concurrency: targetLocales.length }).pipe(Effect.map((xs) => xs.flat()));
+	});
+}
 function computeMissingKeys(adapter, sourceLocale, targetLocales) {
 	return Effect.gen(function* () {
 		const resources = yield* adapter.listResources(sourceLocale);
-		return (yield* Effect.forEach(resources, (resource) => Effect.gen(function* () {
-			const sourceMap = yield* adapter.readResource(sourceLocale, resource);
-			return (yield* Effect.forEach(targetLocales, (locale) => Effect.gen(function* () {
-				const missing = diffKeys(sourceMap, yield* adapter.readResource(locale, resource));
-				return missing.length > 0 ? [{
-					adapter: adapter.name,
-					locale,
-					resource,
-					missing
-				}] : [];
-			}), { concurrency: targetLocales.length })).flat();
-		}), { concurrency: Math.min(resources.length, 10) })).flat();
+		const maxConcurrency = Math.min(resources.length, 10);
+		return yield* Effect.forEach(resources, (resource) => missingForResource(adapter, sourceLocale, targetLocales, resource), { concurrency: maxConcurrency }).pipe(Effect.map((xs) => xs.flat()));
 	});
 }
 //#endregion
@@ -758,7 +780,7 @@ function formatTranslate(result, format) {
 				lines.push("");
 				lines.push(D + "  chunks  total time     avg    min    max" + W);
 				const time = cs.avgDurationMs * cs.chunkCount;
-				lines.push(`  ${cs.chunkCount.toString().padEnd(7)} ${formatMs(time).padEnd(13)} ${formatMs(cs.avgDurationMs).padEnd(6)} ${formatMs(cs.minDurationMs).padEnd(6)} ${formatMs(cs.maxDurationMs)}`);
+				lines.push(`  ${cs.chunkCount.toString().padEnd(CHUNKS_COL_WIDTH)} ${formatMs(time).padEnd(TIME_COL_WIDTH)} ${formatMs(cs.avgDurationMs).padEnd(STAT_COL_WIDTH)} ${formatMs(cs.minDurationMs).padEnd(STAT_COL_WIDTH)} ${formatMs(cs.maxDurationMs)}`);
 				lines.push("");
 				lines.push(D + "  tokens           count" + W);
 				lines.push(`  prompt           ${cs.totalPromptTokens.toLocaleString()}`);
@@ -782,10 +804,15 @@ function formatTranslate(result, format) {
 	return failure(result.message) + "\n";
 }
 function formatMs(ms) {
-	if (ms >= 6e4) return (ms / 6e4).toFixed(1) + "m";
-	if (ms >= 1e3) return (ms / 1e3).toFixed(1) + "s";
+	const MS_PER_MINUTE = 6e4;
+	const MS_PER_SECOND = 1e3;
+	if (ms >= MS_PER_MINUTE) return (ms / MS_PER_MINUTE).toFixed(1) + "m";
+	if (ms >= MS_PER_SECOND) return (ms / MS_PER_SECOND).toFixed(1) + "s";
 	return Math.round(ms) + "ms";
 }
+const CHUNKS_COL_WIDTH = 7;
+const TIME_COL_WIDTH = 13;
+const STAT_COL_WIDTH = 6;
 function formatAdd(result, format) {
 	if (format === "json") return JSON.stringify(result, null, 2) + "\n";
 	if (result.success) {

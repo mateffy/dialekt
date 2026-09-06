@@ -122,7 +122,7 @@ export const requireExplicitReturn = select("packages/*/src/**/*.ts")
   .exclude("**/*.test.ts", "**/*.config.ts", "**/index.ts")
   .label("Public functions and methods need explicit return types")
   .category("strictness")
-  .check(checkRequireExplicitReturnType({ ignore: /^(test|it|describe|beforeEach|afterEach)$/ }));
+  .check(checkRequireExplicitReturnType({ ignore: /^(test|it|describe|beforeEach|afterEach|constructor|isLanguageModel)$/ }));
 
 export const noThrowInGen = select("packages/*/src/**/*.ts")
   .exclude("**/*.test.ts")

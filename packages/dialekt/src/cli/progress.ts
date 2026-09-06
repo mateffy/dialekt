@@ -8,6 +8,11 @@ const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 
+const COL_LOCALE = 9;
+const COL_KEYS = 9;
+const COL_CHUNKS = 8;
+const COL_PROGRESS = 9;
+
 interface Row {
   locale: string;
   resources: number;
@@ -56,12 +61,40 @@ export class ProgressDisplay {
     }, 100);
   }
 
-  localeStarted(locale: string): void { const r = this.rows.get(locale); if (r && r.status === "pending") { r.status = "translating"; r.startTime = Date.now(); } }
-  localeScanned(locale: string, keys: number, chunks: number): void { const r = this.rows.get(locale); if (r) { r.keys = keys; r.chunks = chunks; if (chunks === 0 && keys === 0) { r.status = "no-missing"; r.startTime = Date.now(); } } }
-  chunkComplete(locale: string): void { const r = this.rows.get(locale); if (r && r.status === "translating") r.completed++; }
-  chunkFailed(locale: string): void { const r = this.rows.get(locale); if (r) r.failed++; }
-  localeDone(locale: string): void { const r = this.rows.get(locale); if (r && r.status !== "no-missing") r.status = "done"; }
-  localeError(locale: string): void { const r = this.rows.get(locale); if (r && r.status !== "done") r.status = "error"; }
+  localeStarted(locale: string): void {
+    const r = this.rows.get(locale);
+    if (r && r.status === "pending") {
+      r.status = "translating";
+      r.startTime = Date.now();
+    }
+  }
+  localeScanned(locale: string, keys: number, chunks: number): void {
+    const r = this.rows.get(locale);
+    if (r) {
+      r.keys = keys;
+      r.chunks = chunks;
+      if (chunks === 0 && keys === 0) {
+        r.status = "no-missing";
+        r.startTime = Date.now();
+      }
+    }
+  }
+  chunkComplete(locale: string): void {
+    const r = this.rows.get(locale);
+    if (r && r.status === "translating") r.completed++;
+  }
+  chunkFailed(locale: string): void {
+    const r = this.rows.get(locale);
+    if (r) r.failed++;
+  }
+  localeDone(locale: string): void {
+    const r = this.rows.get(locale);
+    if (r && r.status !== "no-missing") r.status = "done";
+  }
+  localeError(locale: string): void {
+    const r = this.rows.get(locale);
+    if (r && r.status !== "done") r.status = "error";
+  }
 
   /** Called before writing chunk output to stderr — pauses the timer. */
   beforeChunkOutput(): void {
@@ -86,10 +119,20 @@ export class ProgressDisplay {
   }
 
   finish(): void {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
     this.active = false;
     this.draw();
     this.fd.write("\n");
+  }
+
+  private progressStr(row: Row): string {
+    if (row.status === "no-missing") return GREEN + "—" + RESET;
+    if (row.chunks === 0 && row.status === "done") return GREEN + "—" + RESET;
+    if (row.status === "pending") return DIM + "···" + RESET;
+    return `${row.completed + row.failed}/${row.chunks}`;
   }
 
   private draw(): void {
@@ -103,40 +146,50 @@ export class ProgressDisplay {
     for (const locale of this.order) {
       const row = this.rows.get(locale)!;
       const s =
-        row.status === "translating" ? SPINNER[this.frame % SPINNER.length]! + " " :
-        row.status === "pending" ? DIM + "··" + RESET + " " :
-        "  ";
+        row.status === "translating"
+          ? SPINNER[this.frame % SPINNER.length]! + " "
+          : row.status === "pending"
+            ? DIM + "··" + RESET + " "
+            : "  ";
 
       const keysStr = row.keys > 0 ? String(row.keys) : DIM + "···" + RESET;
       const chunksStr = row.chunks > 0 ? String(row.chunks) : DIM + "···" + RESET;
-      const progressStr =
-        row.status === "no-missing" ? GREEN + "—" + RESET :
-        row.chunks === 0 && row.status === "done" ? GREEN + "—" + RESET :
-        row.status === "pending" ? DIM + "···" + RESET :
-        `${row.completed + row.failed}/${row.chunks}`;
+      const progressStr = this.progressStr(row);
 
       let statusStr: string;
       switch (row.status) {
-        case "pending": statusStr = DIM + "pending" + RESET; break;
-        case "translating": statusStr = "translating"; break;
+        case "pending":
+          statusStr = DIM + "pending" + RESET;
+          break;
+        case "translating":
+          statusStr = "translating";
+          break;
         case "done": {
           const el = row.startTime > 0 ? ((Date.now() - row.startTime) / 1000).toFixed(1) : "0.0";
           statusStr = `${GREEN}✓${RESET} done ${DIM}${el}s${RESET}`;
           break;
         }
-        case "no-missing": statusStr = `${GREEN}✓${RESET} ${DIM}complete${RESET}`; break;
-        case "error": statusStr = row.failed > 0 ? `${RED}✗${RESET} ${row.failed} failed` : `${RED}✗${RESET} error`; break;
+        case "no-missing":
+          statusStr = `${GREEN}✓${RESET} ${DIM}complete${RESET}`;
+          break;
+        case "error":
+          statusStr =
+            row.failed > 0 ? `${RED}✗${RESET} ${row.failed} failed` : `${RED}✗${RESET} error`;
+          break;
       }
 
-      this.fd.write(`\r${s}${pad(row.locale, 9)} ${pad(keysStr, 9)} ${pad(chunksStr, 8)} ${pad(progressStr, 9)} ${statusStr}\n`);
+      this.fd.write(
+        `\r${s}${pad(row.locale, COL_LOCALE)} ${pad(keysStr, COL_KEYS)} ${pad(chunksStr, COL_CHUNKS)} ${pad(progressStr, COL_PROGRESS)} ${statusStr}\n`,
+      );
       this.drawn++;
     }
   }
 }
 
 function pad(s: string, n: number): string {
-  const plain = s.replace(/\x1b\[[0-9;]*m/g, "");
-  const padLen = Math.max(0, n - plain.length);
+  const plain = s.replace(/\x1b\[\d;]*m/g, "");
+  const MIN_PAD = 0;
+  const padLen = Math.max(MIN_PAD, n - plain.length);
   return s + " ".repeat(padLen);
 }
 
@@ -191,8 +244,9 @@ export class StatusBar {
       this.fd.write(`${DIM}  waiting...${RESET}`);
     } else {
       const s = SPINNER[this.frame % SPINNER.length]!;
-      const parts = entries.map(([loc, { resource, chunk }]) =>
-        `${CYAN}${loc}${RESET}/${DIM}${resource ?? "?"}${RESET} ${chunk ?? "?"}`,
+      const parts = entries.map(
+        ([loc, { resource, chunk }]) =>
+          `${CYAN}${loc}${RESET}/${DIM}${resource ?? "?"}${RESET} ${chunk ?? "?"}`,
       );
       this.fd.write(`${s}  ${parts.join("  ")}`);
     }
@@ -228,7 +282,10 @@ export class StatusBar {
   }
 
   finish(): void {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
     this.active = false;
     this.fd.write("\r\x1b[K"); // erase status line
   }
