@@ -116,36 +116,44 @@ function writeFileEnsuringDir(path, content) {
 //#endregion
 //#region src/translation/model-registry.ts
 var UnknownProviderError = class extends Data.TaggedError("UnknownProviderError") {};
+function isLanguageModel(v) {
+	return typeof v.doGenerate === "function" || typeof v.specificationVersion !== "undefined";
+}
 /**
 * The one file in the entire codebase allowed to import AI SDK provider packages.
+* Accepts both { provider, modelId } specs and live LanguageModel instances.
 */
 function resolveModel(config) {
-	return Effect.tryPromise({
-		try: async () => {
-			switch (config.provider) {
-				case "openai": {
-					const { openai } = await import("@ai-sdk/openai");
-					return openai(config.modelId);
+	return Effect.gen(function* () {
+		if (isLanguageModel(config)) return config;
+		const { provider, modelId } = config;
+		return yield* Effect.tryPromise({
+			try: async () => {
+				switch (provider) {
+					case "openai": {
+						const { openai } = await import("@ai-sdk/openai");
+						return openai(modelId);
+					}
+					case "openrouter": {
+						const { createOpenAI } = await import("@ai-sdk/openai");
+						return createOpenAI({
+							baseURL: "https://openrouter.ai/api/v1",
+							apiKey: process.env.OPENROUTER_API_KEY ?? ""
+						})(modelId);
+					}
+					case "anthropic": {
+						const { anthropic } = await import("@ai-sdk/anthropic");
+						return anthropic(modelId);
+					}
+					case "google": {
+						const { google } = await import("@ai-sdk/google");
+						return google(modelId);
+					}
+					default: throw new UnknownProviderError({ provider });
 				}
-				case "openrouter": {
-					const { createOpenAI } = await import("@ai-sdk/openai");
-					return createOpenAI({
-						baseURL: "https://openrouter.ai/api/v1",
-						apiKey: process.env.OPENROUTER_API_KEY ?? ""
-					})(config.modelId);
-				}
-				case "anthropic": {
-					const { anthropic } = await import("@ai-sdk/anthropic");
-					return anthropic(config.modelId);
-				}
-				case "google": {
-					const { google } = await import("@ai-sdk/google");
-					return google(config.modelId);
-				}
-				default: throw new UnknownProviderError({ provider: config.provider });
-			}
-		},
-		catch: (cause) => cause instanceof UnknownProviderError ? cause : new UnknownProviderError({ provider: config.provider })
+			},
+			catch: (cause) => cause instanceof UnknownProviderError ? cause : new UnknownProviderError({ provider })
+		});
 	});
 }
 //#endregion

@@ -12,6 +12,7 @@ import { formatAdd, formatError } from "../formatters.js";
 import type { DialektConfig, ChunkingConfig } from "../../config/types.js";
 import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
 import type { TranslationStrategy } from "../../translation/types.js";
+import type { ModelConfig } from "../../translation/model-registry.js";
 import type { TranslationRunConfig } from "../../translation/orchestrator.js";
 
 export interface AddFlags {
@@ -54,10 +55,7 @@ export function runAdd(
   flags: AddFlags,
   tokens: readonly string[],
   configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
-  modelResolver: (config: {
-    provider: string;
-    modelId: string;
-  }) => Effect.Effect<unknown, unknown> = resolveModel,
+  modelResolver: (config: ModelConfig) => Effect.Effect<unknown, unknown> = resolveModel as (config: ModelConfig) => Effect.Effect<unknown, unknown>,
   translationRunner: (opts: TranslationRunConfig) => Effect.Effect<void, unknown> = runTranslation,
   logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
   errorLogger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.error(msg),

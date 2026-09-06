@@ -85,7 +85,7 @@ describe("runTranslate", () => {
       () => Effect.succeed(config),
       (modelConfig) =>
         Effect.sync(() => {
-          usedModel = modelConfig.modelId;
+          usedModel = (modelConfig as { modelId: string }).modelId ?? String(modelConfig);
           return {};
         }),
       () => Effect.void,

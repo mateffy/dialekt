@@ -1,6 +1,6 @@
 {
   "name": "@dialekt/adapter-ios",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "exports": {
     ".": {
@@ -23,5 +23,10 @@
     "tsdown": "^0.22.3",
     "typescript": "^5.8.0",
     "vitest": "^4.0.0"
-  }
+  },
+  "repository": "github:mateffy/dialekt",
+  "homepage": "https://github.com/mateffy/dialekt",
+  "bugs": "https://github.com/mateffy/dialekt/issues",
+  "author": "Mat Effy <mat@mateffy.com>",
+  "license": "MIT"
 }

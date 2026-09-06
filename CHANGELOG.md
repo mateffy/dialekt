@@ -5,63 +5,78 @@ All notable changes to **dialekt** and the `@dialekt/*` packages are documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] — 2026-07-01
+## [1.0.2] — 2026-09-05
 
-Initial release of the dialekt AI translation toolkit.
+### Changed
+
+- `ModelConfig` now accepts either a `{ provider, modelId }` pair or a live
+  Vercel AI SDK `LanguageModel` object. Any AI SDK provider can be used by
+  passing its model factory result directly. See the README for examples.
+
+### Fixed
+
+- Added `repository`, `homepage`, `bugs`, `author`, and `license` metadata
+  to all 12 published packages so npm displays the correct links.
+
+## [1.0.0] — 2026-09-05
+
+First stable release. Everything from 0.1.0, plus:
 
 ### Added
 
-**Core package (`dialekt`)**
+- **Live trace output** (`dialekt translate`): chunk cards with unicode
+  box-drawing, source/target side-by-side, resource name, locale pair, and
+  progress counter. Chunk cards scroll above an animated single-line status
+  bar showing which concurrent threads are active (`ar/estates`,
+  `fr/commission`, etc.).
+- **Incremental saves**: every translated chunk writes to disk immediately.
+  Interrupt with Ctrl+C and re-run — only remaining chunks are left.
+- **Per-chunk cost/timing stats**: prompt tokens, completion tokens,
+  duration, estimated cost (DeepSeek pricing). Displayed in a table at the
+  end of every run.
+- **Per-locale summary**: translated and remaining key counts for every
+  target locale, displayed in a compact table.
+- **OpenRouter provider**: `model: { provider: "openrouter", modelId: "deepseek/deepseek-v4-flash" }`
+- **Config-driven .env loading**: `env: [".env"]` in `dialekt.config.ts`
+  loads variables into `process.env` before model resolution.
+- **Resource name** displayed in every chunk card header.
+- **`--quiet` flag** to suppress chunk cards and show only a progress table.
+- **`--format json`** for machine-readable output on every command.
+- **`--chunk-size` flag** on benchmark command for testing different
+  `keysPerChunk` values.
+- **`dialekt benchmark`** now reports token counts and estimated cost.
+- **Batch PHP reader**: single PHP process reads all files for a locale,
+  making `dialekt missing` ~10x faster (from hundreds of PHP spawns to one
+  per locale).
+- **Parallel locales and resources**: `concurrency` (default 5) applies to
+  both locale-level and resource-level parallelism.
+- **Progress status bar and table tests** (386 total).
 
-- `defineConfig()` — typed configuration with `sourceLocale`, `targetLocales`,
-  `model`, `fastModel`, `chunking`, `retry`, and `adapters`.
-- `loadConfig()` — loads `dialekt.config.ts` via `jiti`, resolves from cwd so
-  relative paths work regardless of where the CLI is invoked.
-- CLI with 7 commands: `translate`, `validate`, `missing`, `unused`,
-  `languages`, `add`, `benchmark`.
-- `--format` flag on every command: `pretty` (default in TTY) or `json`
-  (default when piped or inside an AI agent shell).
-- TTY-gated pretty output with box-drawing tables, grouped results, and ANSI
-  colours. ASCII fallbacks when stdout is not a TTY.
-- `one-shot` and `tool-loop-agent` translation strategies backed by the
-  `ai` SDK (v7).
-- Chunking algorithm that splits large translation sets by token budget.
-- Retry logic with configurable `maxAttempts` and exponential back-off.
-- Missing-key detection — diff every target locale against the source locale
-  per adapter.
-- `TranslationAdapter` interface for framework integrations.
-- Programmatic API exported from `dialekt` for custom scripts.
-- 293 passing tests.
+### Changed
 
-**Laravel adapter (`@dialekt/adapter-laravel`)**
+- `--llm` trace output is now the **default**. Use `--quiet` to suppress.
+- Default `keysPerChunk` reduced from 25 to 10 (benchmarks show this is
+  2-3x faster per chunk).
+- Default `concurrency` increased from 3 to 5.
+- Default strategy is `one-shot` (30% faster than tool-loop-agent per
+  benchmark).
+- `defineConfig()` now provides defaults for `chunking` and `retry` when
+  they are missing from the user config.
+- `translate --language en` now falls back to all non-source locales when
+  `en` is the source.
 
-- Reads and writes PHP array files (`lang/{locale}/{resource}.php`) via a
-  PHP subprocess + `var_export()` round-trip that preserves comments and
-  formatting.
-- Reads and writes JSON string files (`lang/{locale}.json`).
-- Scans Blade views and PHP controllers for `__()`, `@lang()`, and `trans()`
-  calls to detect unused keys.
-- 28 passing tests.
+### Fixed
 
-**Paraglide adapter (`@dialekt/adapter-paraglide`)**
-
-- Reads and writes inlang message-format JSON files (`messages/{locale}.json`).
-- Scans `.ts`, `.tsx`, `.svelte`, and `.vue` source files for `m.key()`
-  references to detect unused keys.
-- 18 passing tests.
-
-**Tooling**
-
-- pnpm workspace with `packages/*` layout.
-- tsdown (Rolldown-based) for bundling every package to ESM + TypeScript
-  declarations.
-- gesetz quality gates configured with custom rules for no-console-log,
-  no-raw-node-io, and no-Effect.runPromise outside entry points.
-- oxfmt for formatting.
-
-**Examples**
-
-- `examples/laravel/` — working Laravel project with `en`, `de`, and `fr`
-  locales, pre-wired `dialekt.config.ts`.
-- `examples/paraglide/` — working Paraglide project with `en`, `de`, `fr`,
-  and `es` locales, pre-wired `dialekt.config.ts`.
+- `unflattenObject` no longer destroys scalar parents when dotted children
+  overlap (e.g. `password` scalar + `password.letters` dotted key).
+  Conflict detection keeps literal dot-keys at the top level.
+- PHP batch reader wrapped `require` in `try/catch(\Throwable)` to survive
+  malformed files (e.g. `models.php` calling undefined `trans_hash()`).
+- `loadConfig` pre-resolves `dialekt` and `@dialekt/*` packages via jiti
+  `virtualModules` so configs work from external cwds.
+- `missing` command respects `targetLocales` from the config instead of
+  always listing all non-source locales.
+- Laravel adapter batched reader cache is invalidated after writes so
+  re-reads hit the updated file.
+- `@dialekt/adapter-laravel` and `dialekt` package.json now have `main`
+  and `types` top-level fields for Node10 module resolution.

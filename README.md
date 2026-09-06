@@ -58,6 +58,46 @@ export default defineConfig({
 });
 ```
 
+## Model providers
+
+dialekt runs on top of the [Vercel AI SDK](https://sdk.vercel.ai), which means
+**any LLM provider** with an AI SDK integration works out of the box.
+
+You can configure your model in two ways:
+
+**A — Provider + model ID** (the simple way)
+
+```ts
+model: { provider: "openai", modelId: "gpt-4o" }
+model: { provider: "openrouter", modelId: "deepseek/deepseek-v4-flash" }
+model: { provider: "anthropic", modelId: "claude-sonnet-4-20250514" }
+model: { provider: "google", modelId: "gemini-2.5-flash" }
+```
+
+**B — A live Vercel AI SDK model object** (for any provider or custom setup)
+
+```ts
+import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { anthropic } from "@ai-sdk/anthropic";
+
+// Any AI SDK factory works:
+export default defineConfig({
+  model: openai("gpt-4o-mini"),
+  // or a custom OpenAI-compatible endpoint:
+  fastModel: createOpenAI({
+    baseURL: "https://your-proxy.com/v1",
+    apiKey: process.env.CUSTOM_KEY,
+  })("gpt-4o-mini"),
+});
+```
+
+This means you can use **any provider** from the
+[Vercel AI SDK providers list](https://sdk.vercel.ai/providers/ai-sdk-providers) —
+OpenAI, Anthropic, Google, Mistral, Groq, Together, Fireworks, DeepSeek,
+OpenRouter, Perplexity, xAI, and dozens more. Just install the corresponding
+`@ai-sdk/*` package and pass the model object directly.
+
 ### 3. Set your API key
 
 ```bash

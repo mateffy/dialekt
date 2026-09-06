@@ -14,6 +14,7 @@ import type { DialektConfig } from "../../config/types.js";
 import type { TranslationAdapter, ResourceRef } from "../../adapter/types.js";
 import type { TranslationStrategy, TranslationContext } from "../../translation/types.js";
 import type { StrategyBenchmarkSummary } from "../../benchmark/metrics.js";
+import type { ModelConfig } from "../../translation/model-registry.js";
 
 export interface BenchmarkFlags {
   readonly config: string;
@@ -26,10 +27,7 @@ export interface BenchmarkFlags {
 
 export interface BenchmarkDeps {
   readonly configLoader: (path: string) => Effect.Effect<DialektConfig, unknown>;
-  readonly modelResolver: (config: {
-    provider: string;
-    modelId: string;
-  }) => Effect.Effect<unknown, unknown>;
+  readonly modelResolver: (config: ModelConfig) => Effect.Effect<unknown, unknown>;
   readonly missingKeysComputer: (
     adapter: TranslationAdapter,
     sourceLocale: string,

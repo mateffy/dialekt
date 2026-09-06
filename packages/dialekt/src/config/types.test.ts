@@ -1,25 +1,23 @@
 import { describe, expect, it } from "vitest";
-import type { DialektConfig, ModelConfig, ChunkingConfig, RetryConfig } from "./types.js";
+import type { DialektConfig, ChunkingConfig, RetryConfig } from "./types.js";
+import type { ModelConfig } from "../translation/model-registry.js";
+
+function ensurePair(model: ModelConfig): { provider: string; modelId: string } {
+  return model as unknown as { provider: string; modelId: string };
+}
 
 describe("config type conformance", () => {
   it("accepts all known model providers", () => {
-    const providers: ModelConfig["provider"][] = [
-      "openai",
-      "anthropic",
-      "google",
-      "mistral",
-      "cohere",
-    ];
+    const providers = ["openai", "anthropic", "google", "mistral", "cohere"];
     for (const provider of providers) {
       const m: ModelConfig = { provider, modelId: "test-model" };
-      expect(m.provider).toBe(provider);
+      expect(ensurePair(m).provider).toBe(provider);
     }
   });
 
   it("accepts any string provider at compile time", () => {
-    // provider is typed as string, not a literal union
     const valid: ModelConfig = { provider: "unknown-provider", modelId: "x" };
-    expect(valid.provider).toBe("unknown-provider");
+    expect(ensurePair(valid).provider).toBe("unknown-provider");
   });
 
   it("ChunkingConfig enforces positive maxTokens", () => {
@@ -102,6 +100,6 @@ describe("config type conformance", () => {
       retry: { maxAttempts: 3, baseDelayMs: 1000 },
       adapters: [],
     };
-    expect(config.fastModel.provider).toBe("anthropic");
+    expect(ensurePair(config.fastModel).provider).toBe("anthropic");
   });
 });

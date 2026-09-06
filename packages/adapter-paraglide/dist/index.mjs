@@ -68,6 +68,54 @@ function findUnusedParaglideKeys(scanPaths, keys) {
 }
 //#endregion
 //#region src/adapter.ts
+function listParaglideLocales(messagesDir) {
+	return Effect.gen(function* () {
+		const fs = yield* FileSystem;
+		yield* Path;
+		if (!(yield* fs.exists(messagesDir).pipe(Effect.orElseSucceed(() => false)))) return [];
+		const entries = yield* fs.readDirectory(messagesDir).pipe(Effect.orElseSucceed(() => []));
+		const locales = [];
+		for (const entry of entries) if (entry.endsWith(".json")) locales.push(entry.replace(/\.json$/, ""));
+		return locales;
+	}).pipe(Effect.mapError((cause) => new AdapterReadError({
+		adapter: "paraglide",
+		locale: "",
+		resource: "",
+		cause
+	})));
+}
+function readParaglideResource(messagesDir, locale, resource) {
+	return Effect.gen(function* () {
+		return (yield* readMessageFile((yield* Path).join(messagesDir, `${locale}.json`)).pipe(Effect.mapError((cause) => new AdapterReadError({
+			adapter: "paraglide",
+			locale,
+			resource: resource.key,
+			cause
+		})))).translations;
+	});
+}
+function writeParaglideResource(messagesDir, locale, resource, entries) {
+	return Effect.gen(function* () {
+		const filePath = (yield* Path).join(messagesDir, `${locale}.json`);
+		yield* writeMessageFile(filePath, entries, (yield* readMessageFile(filePath).pipe(Effect.orElseSucceed(() => ({
+			translations: {},
+			meta: {}
+		})))).meta).pipe(Effect.mapError((cause) => new AdapterWriteError({
+			adapter: "paraglide",
+			locale,
+			resource: resource.key,
+			cause
+		})));
+	});
+}
+function findUnusedParaglideAdapterKeys(messagesDir, scanPaths, locale, resource) {
+	return Effect.gen(function* () {
+		const path = yield* Path;
+		const adapterScanPaths = scanPaths.length > 0 ? scanPaths : [path.resolve(messagesDir, "..")];
+		const map = yield* readParaglideResource(messagesDir, locale, resource);
+		return yield* findUnusedParaglideKeys(adapterScanPaths, Object.keys(map));
+	});
+}
 function paraglide(options) {
 	const { messagesDir, scanPaths = [] } = options;
 	return {
@@ -76,51 +124,14 @@ function paraglide(options) {
 			canCreateResource: true,
 			unusedKeyDetection: true
 		},
-		listLocales: () => Effect.gen(function* () {
-			const fs = yield* FileSystem;
-			yield* Path;
-			if (!(yield* fs.exists(messagesDir).pipe(Effect.orElseSucceed(() => false)))) return [];
-			const entries = yield* fs.readDirectory(messagesDir).pipe(Effect.orElseSucceed(() => []));
-			const locales = [];
-			for (const entry of entries) if (entry.endsWith(".json")) locales.push(entry.replace(/\.json$/, ""));
-			return locales;
-		}).pipe(Effect.mapError((cause) => new AdapterReadError({
-			adapter: "paraglide",
-			locale: "",
-			resource: "",
-			cause
-		})), Effect.provide([NodePlatformLayer])),
+		listLocales: () => listParaglideLocales(messagesDir).pipe(Effect.provide([NodePlatformLayer])),
 		listResources: () => Effect.succeed([{
 			key: "messages",
 			label: "messages"
 		}]),
-		readResource: (locale, resource) => Effect.gen(function* () {
-			return (yield* readMessageFile((yield* Path).join(messagesDir, `${locale}.json`)).pipe(Effect.mapError((cause) => new AdapterReadError({
-				adapter: "paraglide",
-				locale,
-				resource: resource.key,
-				cause
-			})))).translations;
-		}).pipe(Effect.provide([NodePlatformLayer])),
-		writeResource: (locale, resource, entries) => Effect.gen(function* () {
-			const filePath = (yield* Path).join(messagesDir, `${locale}.json`);
-			yield* writeMessageFile(filePath, entries, (yield* readMessageFile(filePath).pipe(Effect.orElseSucceed(() => ({
-				translations: {},
-				meta: {}
-			})))).meta).pipe(Effect.mapError((cause) => new AdapterWriteError({
-				adapter: "paraglide",
-				locale,
-				resource: resource.key,
-				cause
-			})));
-		}).pipe(Effect.provide([NodePlatformLayer])),
-		findUnusedKeys: (locale, resource) => Effect.gen(function* () {
-			const path = yield* Path;
-			return yield* findUnusedParaglideKeys(scanPaths.length > 0 ? scanPaths : [path.resolve(messagesDir, "..")], yield* Effect.gen(function* () {
-				const map = yield* paraglide(options).readResource(locale, resource);
-				return Object.keys(map);
-			}));
-		}).pipe(Effect.provide([NodePlatformLayer]))
+		readResource: (locale, resource) => readParaglideResource(messagesDir, locale, resource).pipe(Effect.provide([NodePlatformLayer])),
+		writeResource: (locale, resource, entries) => writeParaglideResource(messagesDir, locale, resource, entries).pipe(Effect.provide([NodePlatformLayer])),
+		findUnusedKeys: (locale, resource) => findUnusedParaglideAdapterKeys(messagesDir, scanPaths, locale, resource).pipe(Effect.provide([NodePlatformLayer]))
 	};
 }
 //#endregion

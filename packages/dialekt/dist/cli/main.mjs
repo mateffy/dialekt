@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-DHNhjSLE.mjs";
+import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-vHGsz_IO.mjs";
 import { Console, Effect, Option } from "effect";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command, FileSystem } from "@effect/platform";

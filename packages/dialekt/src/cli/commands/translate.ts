@@ -12,6 +12,7 @@ import { ProgressDisplay, StatusBar } from "../progress.js";
 import type { DialektConfig } from "../../config/types.js";
 import type { TranslationRunConfig } from "../../translation/orchestrator.js";
 import type { LanguageModel } from "ai";
+import type { ModelConfig } from "../../translation/model-registry.js";
 
 const D = "\x1b[2m";
 const G = "\x1b[32m";
@@ -80,10 +81,7 @@ const DEEPSEEK_OUTPUT_PER_1M = 0.60;
 export function runTranslate(
   flags: TranslateFlags,
   configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
-  modelResolver: (config: {
-    provider: string;
-    modelId: string;
-  }) => Effect.Effect<unknown, unknown> = resolveModel,
+  modelResolver: (config: ModelConfig) => Effect.Effect<unknown, unknown> = resolveModel as (config: ModelConfig) => Effect.Effect<unknown, unknown>,
   translationRunner: (
     opts: TranslationRunConfig,
     onProgress?: (event: TranslationProgressEvent) => void,

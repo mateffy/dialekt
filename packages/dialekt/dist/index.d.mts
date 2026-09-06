@@ -67,11 +67,25 @@ interface AdapterCapabilities {
   readonly unusedKeyDetection: boolean;
 }
 //#endregion
-//#region src/config/types.d.ts
-interface ModelConfig {
+//#region src/translation/model-registry.d.ts
+declare const UnknownProviderError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
+  readonly _tag: "UnknownProviderError";
+} & Readonly<A>;
+declare class UnknownProviderError extends UnknownProviderError_base<{
+  readonly provider: string;
+}> {}
+/** A model spec: either a live Vercel AI SDK model, or a provider+id pair. */
+type ModelConfig = LanguageModel | {
   readonly provider: string;
   readonly modelId: string;
-}
+};
+/**
+ * The one file in the entire codebase allowed to import AI SDK provider packages.
+ * Accepts both { provider, modelId } specs and live LanguageModel instances.
+ */
+declare function resolveModel(config: ModelConfig): Effect.Effect<LanguageModel, UnknownProviderError>;
+//#endregion
+//#region src/config/types.d.ts
 interface ChunkingConfig {
   readonly maxTokens: number;
   readonly charsPerToken: number;
@@ -174,22 +188,6 @@ declare class PhpExecutionError extends PhpExecutionError_base<{
 declare function readPhpArrayAsJson(absolutePath: string): Effect.Effect<Record<string, unknown>, PhpExecutionError, CommandExecutor>;
 /** Read multiple PHP files in a single PHP process. Returns a map of path → parsed array. */
 declare function readPhpArraysBatch(absolutePaths: readonly string[]): Effect.Effect<Record<string, Record<string, unknown>>, PhpExecutionError, CommandExecutor>;
-//#endregion
-//#region src/translation/model-registry.d.ts
-declare const UnknownProviderError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
-  readonly _tag: "UnknownProviderError";
-} & Readonly<A>;
-declare class UnknownProviderError extends UnknownProviderError_base<{
-  readonly provider: string;
-}> {}
-interface ModelConfig$1 {
-  readonly provider: string;
-  readonly modelId: string;
-}
-/**
- * The one file in the entire codebase allowed to import AI SDK provider packages.
- */
-declare function resolveModel(config: ModelConfig$1): Effect.Effect<LanguageModel, UnknownProviderError>;
 //#endregion
 //#region src/translation/types.d.ts
 interface TranslationContext {

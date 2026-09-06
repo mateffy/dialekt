@@ -1,9 +1,7 @@
 import type { TranslationAdapter } from "../adapter/types.js";
+import type { ModelConfig } from "../translation/model-registry.js";
 
-export interface ModelConfig {
-  readonly provider: string;
-  readonly modelId: string;
-}
+export type { ModelConfig };
 
 export interface ChunkingConfig {
   readonly maxTokens: number;
