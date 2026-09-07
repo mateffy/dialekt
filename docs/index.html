@@ -68,59 +68,123 @@
   .viz figcaption { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #6B7680; margin-bottom: .5rem; }
   .viz-box { border: 1px solid #1A1E23; border-radius: 10px; background: #0C0E11; padding: 1rem 1.25rem; overflow: hidden; }
 
-  /* A — find the gaps */
-  .va-grid { display: flex; gap: 1rem; align-items: stretch; flex-wrap: wrap; }
-  .va-file { flex: 1 1 240px; min-width: 220px; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 2; }
-  .va-head { color: #6B7680; font-size: 10.5px; border-bottom: 1px solid #1A1E23; padding-bottom: .35rem; margin-bottom: .5rem; }
-  .va-row { display: flex; gap: .75rem; align-items: baseline; }
-  .va-k { color: #D6DBDF; }
-  .va-v { color: #9AA3AB; overflow: hidden; text-overflow: ellipsis; }
-  .va-sep { color: #4ADE80; align-self: center; font-size: 16px; }
-  .va-state { display: inline-grid; }
-  .va-state > * { grid-area: 1 / 1; }
-  .va-m { color: #F87171; border: 1px dashed rgba(248,113,113,.45); border-radius: 4px; padding: 0 .4rem; font-size: 11px; white-space: nowrap; }
-  .va-f { color: #4ADE80; white-space: nowrap; }
-  .va-miss { border-radius: 4px; margin: 0 -.3rem; padding: 0 .3rem; }
-  .va-f { opacity: 0; }
-  .viz.on .va-m { animation: v-out 6s infinite; animation-delay: var(--d, 0s); }
-  .viz.on .va-f { animation: v-in 6s infinite; animation-delay: var(--d, 0s); }
-  .viz.on .va-miss { animation: v-scan 6s infinite; animation-delay: var(--d, 0s); }
-  .viz.on .va-sep { animation: v-pulse 1.6s ease-in-out infinite; }
+  /* A — diff: scan pairwise, flag gaps, type translations in */
+  .ga { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .ga-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+  @media (max-width: 600px) { .ga-grid { grid-template-columns: 1fr; } }
+  .ga-head { color: #6B7680; font-size: 10.5px; border-bottom: 1px solid #1A1E23; padding-bottom: .35rem; margin-bottom: .45rem; }
+  .ga-row { display: flex; gap: .7rem; align-items: baseline; line-height: 2; padding: 0 .4rem; margin: 0 -.4rem; border-radius: 4px; transition: background .22s; }
+  .ga-row.scan { background: rgba(103,232,249,.10); }
+  .ga-k { color: #D6DBDF; }
+  .ga-gap .ga-k { color: #6B7680; transition: color .3s; }
+  .ga-gap.done .ga-k { color: #D6DBDF; }
+  .ga-v { color: #9AA3AB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ga-row.ok::after { content: '✓'; margin-left: auto; font-size: 10px; color: rgba(74,222,128,.45); }
+  .ga-badge { color: #F87171; border: 1px dashed rgba(248,113,113,.45); border-radius: 4px; padding: 0 .4rem; font-size: 10.5px; opacity: 0; transition: opacity .25s; }
+  .ga-row.flag .ga-badge { opacity: 1; }
+  .ga-row.typing .ga-badge, .ga-row.done .ga-badge { display: none; }
+  .ga-type { color: #4ADE80; white-space: nowrap; }
+  .ga-row.typing .ga-type::after { content: '▌'; margin-left: 1px; animation: ga-caret .9s steps(2) infinite; }
+  .ga-row.done .ga-type::after { content: ' ✓'; }
+  @keyframes ga-caret { 50% { opacity: 0; } }
+  .ga-status { margin-top: .7rem; padding-top: .55rem; border-top: 1px solid #1A1E23; font-size: 11px; color: #6B7680; min-height: 1.3em; transition: color .3s; }
+  .ga-status.busy { color: #67E8F9; }
+  .ga-status.okay { color: #4ADE80; }
 
-  /* B — chunking */
-  .vb { display: flex; flex-direction: column; gap: .55rem; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
-  .vb-row { display: flex; gap: .75rem; align-items: baseline; }
-  .vb-label { color: #9AA3AB; min-width: 118px; }
-  .vb-state { display: inline-grid; }
-  .vb-state > * { grid-area: 1 / 1; }
-  .vb-send { color: #6B7680; display: inline-flex; gap: .45rem; align-items: center; }
-  .vb-dot { width: 6px; height: 6px; border-radius: 50%; background: #67E8F9; animation: v-pulse 1s ease-in-out infinite; }
-  .vb-done { color: #4ADE80; }
-  .vb-done { opacity: 0; }
-  .viz.on .vb-send { animation: v-out 4s infinite; animation-delay: var(--d, 0s); }
-  .viz.on .vb-done { animation: v-in 4s infinite; animation-delay: var(--d, 0s); }
+  /* B — chunk: one strip of keys is cut apart, processed, merged back */
+  .cb { font-family: "IBM Plex Mono", monospace; }
+  .cb-title { color: #9AA3AB; font-size: 11px; margin-bottom: .6rem; transition: color .4s; }
+  .cb.merged .cb-title { color: #4ADE80; }
+  .cb-strip { border: 1px solid #232932; border-radius: 8px; padding: .45rem; display: flex; flex-direction: column; transition: border-color .5s; }
+  .cb.split .cb-strip { border-color: transparent; }
+  .cb.merged .cb-strip { border-color: rgba(74,222,128,.5); }
+  .cb-seg { position: relative; overflow: hidden; border: 1px solid transparent; border-radius: 7px; padding: .4rem .5rem; transition: margin-top .55s cubic-bezier(.5,.1,.3,1), border-color .45s, background .45s; }
+  .cb.split .cb-seg { border-color: #242B33; background: #0A0C0F; }
+  .cb.split .cb-seg + .cb-seg { margin-top: .55rem; }
+  .cb-seg.done { border-color: rgba(74,222,128,.45); }
+  .cb-seg::before { content: ''; position: absolute; top: 0; left: 8px; right: 8px; border-top: 1px dashed rgba(248,113,113,.7); opacity: 0; transition: opacity .2s; }
+  .cb.cut .cb-seg + .cb-seg::before { opacity: 1; animation: cb-blink .4s ease-in-out infinite; }
+  @keyframes cb-blink { 50% { opacity: .15; } }
+  .cb-seg::after { content: ''; position: absolute; inset: 0; transform: translateX(-130%); background: linear-gradient(100deg, transparent 30%, rgba(103,232,249,.13) 50%, transparent 70%); }
+  .cb-seg.proc::after { animation: cb-sweep 1.1s linear infinite; }
+  @keyframes cb-sweep { to { transform: translateX(130%); } }
+  .cb-meta { display: flex; justify-content: space-between; align-items: baseline; max-height: 0; opacity: 0; overflow: hidden; margin-bottom: 0; transition: max-height .4s, opacity .4s, margin-bottom .4s; }
+  .cb.split .cb-meta { max-height: 18px; opacity: 1; margin-bottom: .3rem; }
+  .cb-tag { font-size: 10px; color: #6B7680; }
+  .cb-stat { font-size: 10px; }
+  .cb-stat::after { content: ''; }
+  .cb-seg.proc .cb-stat::after { content: '→ model'; color: #67E8F9; }
+  .cb-seg.done .cb-stat::after { content: '✓ translated'; color: #4ADE80; }
+  .cb-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .cb-chip { background: #14171B; border: 1px solid #22272E; border-radius: 4px; padding: .1rem .4rem; font-size: 10.5px; color: #9AA3AB; transition: color .35s, border-color .35s, background .35s; }
+  .cb-seg.proc .cb-chip { border-color: rgba(103,232,249,.28); }
+  .cb-seg.done .cb-chip { color: #4ADE80; border-color: rgba(74,222,128,.28); background: rgba(74,222,128,.05); }
+  .cb-bar { height: 2px; background: #1A1E23; border-radius: 2px; margin-top: 0; max-height: 0; opacity: 0; overflow: hidden; transition: max-height .4s, opacity .4s, margin-top .4s; }
+  .cb.split .cb-bar { max-height: 2px; opacity: 1; margin-top: .4rem; }
+  .cb-bar i { display: block; height: 100%; background: #67E8F9; transform: scaleX(0); transform-origin: left; }
+  .cb-seg.done .cb-bar { opacity: .25; }
 
-  /* C — retry */
-  .vc { display: flex; flex-direction: column; gap: .45rem; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
-  .vc-row { display: flex; gap: .75rem; align-items: baseline; opacity: 0; }
-  .viz.on .vc-row { animation: v-appear 8s infinite; animation-delay: var(--d, 0s); }
-  .vc-a { color: #9AA3AB; min-width: 76px; }
-  .vc-x { color: #F87171; }
-  .vc-ok { color: #4ADE80; }
-  .vc-b { color: #3A4048; font-size: 11px; margin-left: auto; }
+  /* C — retry: request/response exchange, step by step */
+  .rt { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  .rt-head { display: flex; align-items: center; gap: .7rem; margin-bottom: .7rem; }
+  .rt-actor { font-size: 10.5px; color: #4ADE80; border: 1px solid rgba(74,222,128,.3); border-radius: 5px; padding: .1rem .5rem; background: rgba(74,222,128,.06); }
+  .rt-actor.rt-model { color: #67E8F9; border-color: rgba(103,232,249,.3); background: rgba(103,232,249,.06); }
+  .rt-hline { flex: 1; border-top: 1px dashed #1A1E23; }
+  .rt-rows { display: flex; flex-direction: column; gap: .45rem; transition: opacity .4s; }
+  .rt.fade .rt-rows { opacity: 0; }
+  .rt-row { opacity: 0; transform: translateY(4px); transition: opacity .3s, transform .3s; }
+  .rt-row.go { opacity: 1; transform: none; }
+  .rt-lbl { display: block; font-size: 10.5px; margin-bottom: 2px; color: #9AA3AB; }
+  .rt-req { color: rgba(74,222,128,.85); }
+  .rt-res { color: #9AA3AB; }
+  .rt-res .rt-lbl { text-align: right; }
+  .rt-res.bad { color: #F87171; } .rt-res.bad .rt-lbl { color: #F87171; }
+  .rt-res.good { color: #4ADE80; } .rt-res.good .rt-lbl { color: #4ADE80; }
+  .rt-arrow { position: relative; height: 9px; }
+  .rt-arrow i { position: absolute; top: 4px; height: 1px; width: 0; background: currentColor; opacity: .7; transition: width .55s cubic-bezier(.4,.7,.3,1); }
+  .rt-r i { left: 0; }
+  .rt-l i { right: 0; }
+  .rt-arrow i::after { content: ''; position: absolute; top: -3.5px; border-top: 4px solid transparent; border-bottom: 4px solid transparent; opacity: 0; transition: opacity .2s; }
+  .rt-r i::after { right: -1px; border-left: 6px solid currentColor; }
+  .rt-l i::after { left: -1px; border-right: 6px solid currentColor; }
+  .rt-row.draw .rt-arrow i { width: 100%; }
+  .rt-row.draw .rt-arrow i::after { opacity: 1; }
+  .rt-wait { display: flex; align-items: center; justify-content: center; gap: .6rem; color: #FBBF24; font-size: 10.5px; }
+  .rt-wbar { width: 90px; height: 2px; background: #1A1E23; border-radius: 2px; overflow: hidden; }
+  .rt-wbar i { display: block; height: 100%; width: 100%; background: #FBBF24; transform-origin: left; }
+  .rt-done { color: #4ADE80; font-size: 11px; border-top: 1px solid #1A1E23; padding-top: .5rem; margin-top: .1rem; }
 
-  @keyframes v-out { 0%, 50% { opacity: 1; } 65%, 100% { opacity: 0; } }
-  @keyframes v-in { 0%, 55% { opacity: 0; } 70%, 100% { opacity: 1; } }
-  @keyframes v-scan { 0%, 14% { background: rgba(248,113,113,.16); } 100% { background: transparent; } }
-  @keyframes v-pulse { 50% { opacity: .3; } }
-  @keyframes v-appear { 0% { opacity: 0; transform: translateY(3px); } 4% { opacity: 1; transform: none; } 100% { opacity: 1; } }
+  /* D — the loop: per-locale pipeline */
+  .tl { font-family: "IBM Plex Mono", monospace; }
+  .tl-title { color: #9AA3AB; font-size: 11px; margin-bottom: .7rem; }
+  .tl-legend { display: grid; grid-template-columns: 34px 1fr 90px; margin-bottom: .35rem; }
+  .tl-legend-labels { display: flex; justify-content: space-between; margin: 0 -17px; }
+  .tl-legend-labels span { width: 34px; text-align: center; font-size: 9px; color: #6B7680; }
+  .tl-lane { display: grid; grid-template-columns: 34px 1fr 90px; align-items: center; padding: .3rem 0; }
+  .tl-track { display: flex; align-items: center; }
+  .tl-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #232932; transition: background .3s, box-shadow .3s; }
+  .tl-dot.on { background: #67E8F9; box-shadow: 0 0 9px rgba(103,232,249,.55); animation: tl-pulse .9s ease-in-out infinite; }
+  @keyframes tl-pulse { 50% { opacity: .45; } }
+  .tl-dot.pass { background: #4ADE80; }
+  .tl-dot.err { background: #F87171; box-shadow: 0 0 9px rgba(248,113,113,.55); }
+  .tl-wire { flex: 1; height: 2px; background: #232932; transition: background .45s; }
+  .tl-wire.pass { background: rgba(74,222,128,.5); }
+  .tl-loc { font-size: 11px; color: #9AA3AB; transition: color .3s; }
+  .tl-lane.done .tl-loc { color: #4ADE80; }
+  .tl-res { font-size: 10px; color: #6B7680; text-align: right; white-space: nowrap; }
+  .tl-res.show { color: #4ADE80; }
+  .tl-status { margin-top: .7rem; padding-top: .55rem; border-top: 1px solid #1A1E23; font-size: 11px; color: #6B7680; min-height: 1.3em; transition: color .3s; }
+  .tl-status.busy { color: #67E8F9; }
+  .tl-status.okay { color: #4ADE80; }
+
+  /* layout-shift guard: kill transitions while measuring reserved heights */
+  .measuring, .measuring * { transition: none !important; animation: none !important; }
 
   @media (prefers-reduced-motion: reduce) {
     .cursor-blink, .pulse { animation: none; }
-    .viz.on .va-m, .viz.on .vb-send { animation: none; opacity: 0; }
-    .viz.on .va-f, .viz.on .vb-done { animation: none; opacity: 1; }
-    .viz.on .va-miss, .viz.on .va-sep { animation: none; }
-    .viz.on .vc-row { animation: none; opacity: 1; }
+    .ga-row, .ga-badge, .cb-strip, .cb-seg, .cb-meta, .cb-bar, .cb-chip, .cb-title,
+    .rt-rows, .rt-row, .rt-arrow i, .rt-arrow i::after { transition: none !important; animation: none !important; }
+    .ga-row.typing .ga-type::after { animation: none; }
   }
 </style>
 </head>
@@ -136,6 +200,7 @@
     <a href="#top" class="ml-3 font-semibold text-[22px] leading-none tracking-tight text-[#D6DBDF] hover:text-[#4ADE80] transition-colors">dialekt<span class="text-[#4ADE80]">.</span></a>
     <nav class="ml-auto flex items-center gap-5 text-[11px] text-[#6B7680]">
       <a href="#how-it-works" class="hover:text-[#D6DBDF] transition-colors">how it works</a>
+      <a href="#the-loop" class="hover:text-[#D6DBDF] transition-colors">the loop</a>
       <a href="#commands" class="hover:text-[#D6DBDF] transition-colors">commands</a>
       <a href="#frameworks" class="hover:text-[#D6DBDF] transition-colors">frameworks</a>
       <a href="#get-started" class="hover:text-[#D6DBDF] transition-colors">get started</a>
@@ -178,53 +243,119 @@
       <!-- explainers -->
       <div class="viz-stack">
 
-        <figure class="viz" data-viz>
-          <figcaption>find the gaps &mdash; missing keys are diffed against the source</figcaption>
+        <figure class="viz" data-kind="gaps">
+          <figcaption>01 &middot; diff &mdash; scan the target, flag missing keys, translate, write</figcaption>
           <div class="viz-box">
-            <div class="va-grid">
-              <div class="va-file">
-                <div class="va-head">lang/en/auth.php</div>
-                <div class="va-row"><span class="va-k">login</span><span class="va-v">'Log in'</span></div>
-                <div class="va-row"><span class="va-k">logout</span><span class="va-v">'Log out'</span></div>
-                <div class="va-row"><span class="va-k">forgot_password</span><span class="va-v">'Forgot your password?'</span></div>
-                <div class="va-row"><span class="va-k">remember_me</span><span class="va-v">'Remember me'</span></div>
-              </div>
-              <div class="va-sep">⟶</div>
-              <div class="va-file">
-                <div class="va-head">lang/de/auth.php</div>
-                <div class="va-row"><span class="va-k">login</span><span class="va-v">'Anmelden'</span></div>
-                <div class="va-row"><span class="va-k">logout</span><span class="va-v">'Abmelden'</span></div>
-                <div class="va-row va-miss" style="--d: 0s">
-                  <span class="va-k">forgot_password</span>
-                  <span class="va-state"><span class="va-m">missing</span><span class="va-f">'Passwort vergessen?' ✓</span></span>
+            <div class="ga">
+              <div class="ga-grid">
+                <div class="ga-file ga-src">
+                  <div class="ga-head">lang/en/auth.php &middot; source</div>
+                  <div class="ga-row"><span class="ga-k">login</span><span class="ga-v">'Log in'</span></div>
+                  <div class="ga-row"><span class="ga-k">logout</span><span class="ga-v">'Log out'</span></div>
+                  <div class="ga-row"><span class="ga-k">forgot_password</span><span class="ga-v">'Forgot your password?'</span></div>
+                  <div class="ga-row"><span class="ga-k">remember_me</span><span class="ga-v">'Remember me'</span></div>
                 </div>
-                <div class="va-row va-miss" style="--d: 2.8s">
-                  <span class="va-k">remember_me</span>
-                  <span class="va-state"><span class="va-m">missing</span><span class="va-f">'Angemeldet bleiben' ✓</span></span>
+                <div class="ga-file ga-tgt">
+                  <div class="ga-head">lang/de/auth.php &middot; target</div>
+                  <div class="ga-row"><span class="ga-k">login</span><span class="ga-v">'Anmelden'</span></div>
+                  <div class="ga-row"><span class="ga-k">logout</span><span class="ga-v">'Abmelden'</span></div>
+                  <div class="ga-row ga-gap" data-value="'Passwort vergessen?'"><span class="ga-k">forgot_password</span><span class="ga-badge">missing</span><span class="ga-type"></span></div>
+                  <div class="ga-row ga-gap" data-value="'Angemeldet bleiben'"><span class="ga-k">remember_me</span><span class="ga-badge">missing</span><span class="ga-type"></span></div>
+                </div>
+              </div>
+              <div class="ga-status">&middot;</div>
+            </div>
+          </div>
+        </figure>
+
+      </div>
+    </section>
+
+    <section class="mt-16 sm:mt-20">
+      <h2 id="the-loop" class="font-mono text-lg font-semibold tracking-tight text-[#4ADE80]">## the translation loop</h2>
+      <p class="mt-4 max-w-2xl font-sans text-[15px] leading-[1.8] text-[#9AA3AB]">
+        Running <code class="font-mono text-[13px] text-[#D6DBDF]">dialekt translate</code> puts every target
+        locale through the same pipeline: diff it against the source, split the missing keys into chunks,
+        send each chunk to the model, validate the response, and write the translations back through your
+        framework's adapter. Chunks run concurrently, and a chunk that fails validation is retried with
+        exponential backoff instead of aborting the run.
+      </p>
+
+      <div class="viz-stack">
+
+        <figure class="viz" data-kind="pipeline">
+          <figcaption>02 &middot; the loop &mdash; every locale runs diff &rarr; chunk &rarr; model &rarr; write</figcaption>
+          <div class="viz-box">
+            <div class="tl">
+              <div class="tl-title">dialekt translate &middot; 4 target locales</div>
+              <div class="tl-legend"><span></span><div class="tl-legend-labels"><span>diff</span><span>chunk</span><span>model</span><span>write</span></div><span></span></div>
+              <div class="tl-lane">
+                <span class="tl-loc">de</span>
+                <div class="tl-track"><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i></div>
+                <span class="tl-res">&middot;</span>
+              </div>
+              <div class="tl-lane">
+                <span class="tl-loc">fr</span>
+                <div class="tl-track"><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i></div>
+                <span class="tl-res">&middot;</span>
+              </div>
+              <div class="tl-lane">
+                <span class="tl-loc">es</span>
+                <div class="tl-track"><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i></div>
+                <span class="tl-res">&middot;</span>
+              </div>
+              <div class="tl-lane">
+                <span class="tl-loc">ja</span>
+                <div class="tl-track"><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i><i class="tl-wire"></i><i class="tl-dot"></i></div>
+                <span class="tl-res">&middot;</span>
+              </div>
+              <div class="tl-status">&middot;</div>
+            </div>
+          </div>
+        </figure>
+
+        <figure class="viz" data-kind="chunk">
+          <figcaption>03 &middot; chunk &mdash; big files are cut into chunks and translated concurrently</figcaption>
+          <div class="viz-box">
+            <div class="cb">
+              <div class="cb-title">lang/de/auth.php &middot; 17 missing keys</div>
+              <div class="cb-strip">
+                <div class="cb-seg">
+                  <div class="cb-meta"><span class="cb-tag">chunk 1 &middot; 6 keys</span><span class="cb-stat"></span></div>
+                  <div class="cb-chips"><span class="cb-chip">login</span><span class="cb-chip">logout</span><span class="cb-chip">register</span><span class="cb-chip">forgot_password</span><span class="cb-chip">remember_me</span><span class="cb-chip">confirm_password</span></div>
+                  <div class="cb-bar"><i></i></div>
+                </div>
+                <div class="cb-seg">
+                  <div class="cb-meta"><span class="cb-tag">chunk 2 &middot; 6 keys</span><span class="cb-stat"></span></div>
+                  <div class="cb-chips"><span class="cb-chip">reset_password</span><span class="cb-chip">verify_email</span><span class="cb-chip">already_registered</span><span class="cb-chip">send_reset_link</span><span class="cb-chip">throttle</span><span class="cb-chip">failed</span></div>
+                  <div class="cb-bar"><i></i></div>
+                </div>
+                <div class="cb-seg">
+                  <div class="cb-meta"><span class="cb-tag">chunk 3 &middot; 5 keys</span><span class="cb-stat"></span></div>
+                  <div class="cb-chips"><span class="cb-chip">password</span><span class="cb-chip">email</span><span class="cb-chip">name</span><span class="cb-chip">submit</span><span class="cb-chip">cancel</span></div>
+                  <div class="cb-bar"><i></i></div>
                 </div>
               </div>
             </div>
           </div>
         </figure>
 
-        <figure class="viz" data-viz>
-          <figcaption>chunk &mdash; large sets are split to stay under token limits</figcaption>
+        <figure class="viz" data-kind="retry">
+          <figcaption>04 &middot; retry &mdash; malformed responses are rejected and retried with backoff</figcaption>
           <div class="viz-box">
-            <div class="vb">
-              <div class="vb-row" style="--d: 0s"><span class="vb-label">chunk 1 · 6 keys</span><span class="vb-state"><span class="vb-send"><i class="vb-dot"></i>sending</span><span class="vb-done">✓ translated</span></span></div>
-              <div class="vb-row" style="--d: .8s"><span class="vb-label">chunk 2 · 6 keys</span><span class="vb-state"><span class="vb-send"><i class="vb-dot"></i>sending</span><span class="vb-done">✓ translated</span></span></div>
-              <div class="vb-row" style="--d: 1.6s"><span class="vb-label">chunk 3 · 5 keys</span><span class="vb-state"><span class="vb-send"><i class="vb-dot"></i>sending</span><span class="vb-done">✓ translated</span></span></div>
-            </div>
-          </div>
-        </figure>
-
-        <figure class="viz" data-viz>
-          <figcaption>retry &mdash; a malformed chunk retries with backoff</figcaption>
-          <div class="viz-box">
-            <div class="vc">
-              <div class="vc-row" style="--d: 0s"><span class="vc-a">attempt 1</span><span class="vc-x">✗ malformed</span><span class="vc-b">+1s</span></div>
-              <div class="vc-row" style="--d: 2.4s"><span class="vc-a">attempt 2</span><span class="vc-x">✗ malformed</span><span class="vc-b">+2s</span></div>
-              <div class="vc-row" style="--d: 4.8s"><span class="vc-a">attempt 3</span><span class="vc-ok">✓ written</span></div>
+            <div class="rt">
+              <div class="rt-head"><span class="rt-actor">dialekt</span><span class="rt-hline"></span><span class="rt-actor rt-model">model</span></div>
+              <div class="rt-rows">
+                <div class="rt-row rt-req"><span class="rt-lbl">chunk 2 &middot; 6 keys → translate to de</span><div class="rt-arrow rt-r"><i></i></div></div>
+                <div class="rt-row rt-res bad"><span class="rt-lbl">✗ invalid JSON</span><div class="rt-arrow rt-l"><i></i></div></div>
+                <div class="rt-row rt-wait" data-ms="1000"><span>backoff 1s</span><span class="rt-wbar"><i></i></span></div>
+                <div class="rt-row rt-req"><span class="rt-lbl">retry 1 &middot; chunk 2</span><div class="rt-arrow rt-r"><i></i></div></div>
+                <div class="rt-row rt-res bad"><span class="rt-lbl">✗ keys missing from response</span><div class="rt-arrow rt-l"><i></i></div></div>
+                <div class="rt-row rt-wait" data-ms="2000"><span>backoff 2s</span><span class="rt-wbar"><i></i></span></div>
+                <div class="rt-row rt-req"><span class="rt-lbl">retry 2 &middot; chunk 2</span><div class="rt-arrow rt-r"><i></i></div></div>
+                <div class="rt-row rt-res good"><span class="rt-lbl">✓ 6 translations &middot; valid</span><div class="rt-arrow rt-l"><i></i></div></div>
+                <div class="rt-row rt-done"><span>✓ chunk 2 written → lang/de/auth.php</span></div>
+              </div>
             </div>
           </div>
         </figure>
@@ -866,13 +997,224 @@ async function playStep(i) {
   playStep((i + 1) % totalSteps);
 }
 
-/* explainer visuals: start animating when scrolled into view */
+/* ── explainer drivers: each viz plays a scripted loop once scrolled into view ── */
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleepV = ms => new Promise(r => setTimeout(r, ms));
+
+async function typeInto(el, text) {
+  el.textContent = '';
+  for (const ch of text) { el.textContent += ch; await sleepV(34); }
+}
+
+/* A — diff: scan both files row by row, flag the gaps, type the translations in */
+async function gapsLoop(fig) {
+  const srcRows = [...fig.querySelectorAll('.ga-src .ga-row')];
+  const tgtRows = [...fig.querySelectorAll('.ga-tgt .ga-row')];
+  const status = fig.querySelector('.ga-status');
+  const setStatus = (text, cls) => { status.textContent = text; status.className = 'ga-status' + (cls ? ' ' + cls : ''); };
+  while (true) {
+    tgtRows.forEach(r => r.classList.remove('flag', 'ok', 'typing', 'done'));
+    fig.querySelectorAll('.ga-type').forEach(t => t.textContent = '');
+    setStatus('·');
+    await sleepV(800);
+    setStatus('diffing en ⟷ de …', 'busy');
+    for (let i = 0; i < srcRows.length; i++) {
+      srcRows[i].classList.add('scan'); tgtRows[i].classList.add('scan');
+      await sleepV(330);
+      srcRows[i].classList.remove('scan'); tgtRows[i].classList.remove('scan');
+      tgtRows[i].classList.add(tgtRows[i].classList.contains('ga-gap') ? 'flag' : 'ok');
+    }
+    setStatus('2 keys missing → translating', 'busy');
+    await sleepV(900);
+    for (const row of tgtRows.filter(r => r.classList.contains('ga-gap'))) {
+      row.classList.remove('flag'); row.classList.add('typing');
+      await typeInto(row.querySelector('.ga-type'), row.dataset.value);
+      row.classList.remove('typing'); row.classList.add('done');
+      await sleepV(280);
+    }
+    setStatus('✓ written · lang/de/auth.php', 'okay');
+    await sleepV(3500);
+  }
+}
+
+/* B — chunk: cut marks blink, the strip splits apart, chunks process concurrently, merge back */
+async function chunkLoop(fig) {
+  const cb = fig.querySelector('.cb');
+  const segs = [...cb.querySelectorAll('.cb-seg')];
+  const title = cb.querySelector('.cb-title');
+  const durations = [1300, 1800, 1550];
+  while (true) {
+    cb.classList.remove('cut', 'split', 'merged');
+    segs.forEach(s => {
+      s.classList.remove('proc', 'done');
+      const bar = s.querySelector('.cb-bar i');
+      bar.style.transition = 'none'; bar.style.transform = 'scaleX(0)';
+      void bar.offsetWidth;
+    });
+    title.textContent = 'lang/de/auth.php · 17 missing keys';
+    await sleepV(1100);
+    cb.classList.add('cut');                 /* cut marks blink at the split points */
+    await sleepV(950);
+    cb.classList.remove('cut'); cb.classList.add('split');   /* the strip physically separates */
+    await sleepV(700);
+    await Promise.all(segs.map(async (s, i) => {             /* chunks process concurrently */
+      await sleepV(i * 220);
+      s.classList.add('proc');
+      const bar = s.querySelector('.cb-bar i');
+      bar.style.transition = `transform ${durations[i]}ms linear`;
+      void bar.offsetWidth;
+      bar.style.transform = 'scaleX(1)';
+      await sleepV(durations[i] + 80);
+      s.classList.remove('proc'); s.classList.add('done');
+    }));
+    await sleepV(550);
+    cb.classList.remove('split'); cb.classList.add('merged'); /* rows slide back together */
+    title.textContent = '✓ 17 keys translated → lang/de/auth.php';
+    await sleepV(3200);
+  }
+}
+
+/* C — retry: a request/response exchange plays out step by step */
+async function retryLoop(fig) {
+  const rt = fig.querySelector('.rt');
+  const rows = [...rt.querySelectorAll('.rt-row')];
+  while (true) {
+    rows.forEach(r => r.classList.remove('go', 'draw'));
+    rt.querySelectorAll('.rt-wbar i').forEach(b => { b.style.transition = 'none'; b.style.transform = 'scaleX(1)'; });
+    void rt.offsetWidth;
+    rt.classList.remove('fade');
+    await sleepV(600);
+    for (const row of rows) {
+      row.classList.add('go');
+      if (row.classList.contains('rt-wait')) {
+        const bar = row.querySelector('.rt-wbar i');
+        const ms = +row.dataset.ms;
+        bar.style.transition = `transform ${ms}ms linear`;
+        void bar.offsetWidth;
+        bar.style.transform = 'scaleX(0)';
+        await sleepV(ms + 120);
+      } else if (row.querySelector('.rt-arrow')) {
+        await sleepV(80);
+        row.classList.add('draw');
+        await sleepV(640);
+      } else {
+        await sleepV(450);
+      }
+      await sleepV(150);
+    }
+    await sleepV(2800);
+    rt.classList.add('fade');
+    await sleepV(500);
+  }
+}
+
+function showFinal(fig, kind) {
+  if (kind === 'gaps') {
+    fig.querySelectorAll('.ga-gap').forEach(r => { r.classList.add('done'); r.querySelector('.ga-type').textContent = r.dataset.value; });
+    const s = fig.querySelector('.ga-status'); s.textContent = '✓ written · lang/de/auth.php'; s.classList.add('okay');
+  } else if (kind === 'chunk') {
+    const cb = fig.querySelector('.cb');
+    cb.classList.add('merged');
+    cb.querySelectorAll('.cb-seg').forEach(s => s.classList.add('done'));
+    cb.querySelector('.cb-title').textContent = '✓ 17 keys translated → lang/de/auth.php';
+  } else if (kind === 'retry') {
+    fig.querySelectorAll('.rt-row').forEach(r => r.classList.add('go', 'draw'));
+  } else if (kind === 'pipeline') {
+    const plan = [2, 17, 5, 9];
+    fig.querySelectorAll('.tl-lane').forEach((l, i) => {
+      l.classList.add('done');
+      l.querySelectorAll('.tl-dot').forEach(d => d.classList.add('pass'));
+      l.querySelectorAll('.tl-wire').forEach(w => w.classList.add('pass'));
+      const r = l.querySelector('.tl-res'); r.textContent = '✓ ' + plan[i] + ' keys'; r.classList.add('show');
+    });
+    const s = fig.querySelector('.tl-status'); s.textContent = '✓ 4 locales in sync · 33 keys written'; s.classList.add('okay');
+  }
+}
+
+/* layout-shift guard: the chunk viz grows when it splits — reserve its tallest
+   (split) height up front so the animation never moves content below it */
+function reserveChunkHeight() {
+  document.querySelectorAll('.viz[data-kind="chunk"] .cb').forEach(cb => {
+    const wasSplit = cb.classList.contains('split');
+    cb.style.minHeight = '';
+    cb.classList.add('measuring');
+    if (!wasSplit) cb.classList.add('split');
+    const h = cb.offsetHeight;
+    if (!wasSplit) cb.classList.remove('split');
+    void cb.offsetWidth;                 /* flush while transitions are off */
+    cb.classList.remove('measuring');
+    cb.style.minHeight = h + 'px';
+  });
+}
+reserveChunkHeight();
+let rzT; addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(reserveChunkHeight, 150); });
+
+/* D — the loop: every locale progresses through diff → chunk → model → write, staggered */
+async function pipelineLoop(fig) {
+  const lanes = [...fig.querySelectorAll('.tl-lane')];
+  const status = fig.querySelector('.tl-status');
+  const setStatus = (t, c) => { status.textContent = t; status.className = 'tl-status' + (c ? ' ' + c : ''); };
+  const plan = [
+    { keys: 2,  chunks: 1, retry: 0, delay: 0,    work: 700  },
+    { keys: 17, chunks: 3, retry: 1, delay: 500,  work: 1600 },
+    { keys: 5,  chunks: 1, retry: 0, delay: 1000, work: 950  },
+    { keys: 9,  chunks: 2, retry: 0, delay: 1500, work: 1250 },
+  ];
+  while (true) {
+    lanes.forEach(l => {
+      l.classList.remove('done');
+      l.querySelectorAll('.tl-dot').forEach(d => d.classList.remove('on', 'pass', 'err'));
+      l.querySelectorAll('.tl-wire').forEach(w => w.classList.remove('pass'));
+      const r = l.querySelector('.tl-res'); r.classList.remove('show'); r.textContent = '·';
+    });
+    setStatus('·');
+    await sleepV(900);
+    setStatus('⟳ translate — 4 target locales', 'busy');
+    await Promise.all(lanes.map(async (lane, i) => {
+      const p = plan[i];
+      const dots = [...lane.querySelectorAll('.tl-dot')];
+      const wires = [...lane.querySelectorAll('.tl-wire')];
+      const res = lane.querySelector('.tl-res');
+      const say = t => { res.textContent = t; };
+      const pass = idx => { dots[idx].classList.remove('on'); dots[idx].classList.add('pass'); if (wires[idx]) wires[idx].classList.add('pass'); };
+      await sleepV(p.delay);
+      /* diff */
+      dots[0].classList.add('on'); say('diff');
+      await sleepV(520); pass(0);
+      /* chunk */
+      dots[1].classList.add('on'); say(p.chunks > 1 ? p.chunks + ' chunks' : '1 chunk');
+      await sleepV(300 + p.chunks * 220); pass(1);
+      /* model (+retry flicker) */
+      dots[2].classList.add('on'); say('model');
+      for (let r = 0; r < p.retry; r++) {
+        await sleepV(450);
+        dots[2].classList.add('err'); say('retry ' + (r + 1));
+        await sleepV(500);
+        dots[2].classList.remove('err'); say('model');
+      }
+      await sleepV(p.work); pass(2);
+      /* write */
+      dots[3].classList.add('on'); say('write');
+      await sleepV(420); pass(3);
+      lane.classList.add('done');
+      say('✓ ' + p.keys + ' keys'); res.classList.add('show');
+    }));
+    setStatus('✓ 4 locales in sync · 33 keys written', 'okay');
+    await sleepV(3600);
+  }
+}
+
+const VIZ_DRIVERS = { gaps: gapsLoop, chunk: chunkLoop, retry: retryLoop, pipeline: pipelineLoop };
 document.querySelectorAll('.viz').forEach(v => {
   const io = new IntersectionObserver((entries, obs) => {
     entries.forEach(e => {
-      if (e.isIntersecting) { e.target.classList.add('on'); obs.disconnect(); }
+      if (!e.isIntersecting) return;
+      obs.disconnect();
+      const kind = e.target.dataset.kind;
+      if (reducedMotion) showFinal(e.target, kind);
+      else if (VIZ_DRIVERS[kind]) VIZ_DRIVERS[kind](e.target);
     });
-  }, { threshold: 0.3 });
+  }, { threshold: 0.25 });
   io.observe(v);
 });
 
