@@ -21,6 +21,8 @@ dialekt is an extendable harness, not a closed box. The core package handles chu
 | `add`       | Inserts a new key and triggers translation           |
 | `missing`   | Lists every missing key without writing files        |
 | `unused`    | Scans source code for keys that no longer appear     |
+| `hardcoded` | Scans source code for raw, untranslated strings      |
+| `doctor`    | Combines missing keys and hardcoded strings in one report |
 | `languages` | Shows which locales each adapter detected            |
 
 ## Quick start
@@ -130,6 +132,50 @@ The Laravel adapter requires `php` on your `PATH`. Both the Laravel and Paraglid
 
 You can write your own adapter by implementing the `TranslationAdapter` interface. See [`packages/adapter-laravel/src/adapter.ts`](packages/adapter-laravel/src/adapter.ts) for a full example.
 
+## Finding hardcoded strings
+
+`dialekt hardcoded` scans your source files for raw, untranslated strings. It reports JSX text, JSX attributes, Blade text, and Blade attributes. It also reports React and HTML attributes such as `label`, `placeholder`, `title`, `alt`, and `aria-label`.
+
+The scanner uses [ast-grep](https://ast-grep.github.io/) tree-sitter grammars. It parses JavaScript, TypeScript, JSX, TSX, and Blade (as HTML). By default, the scanner ignores technical attributes such as `type`, `className`, `id`, and `href`.
+
+```ts
+export default defineConfig({
+  // ...
+  hardcoded: {
+    scanPaths: ["./src"],
+    minLength: 2,
+    ignoredAttributes: ["data-cy"],
+    ignoredValues: ["OK"],
+    languages: {
+      typescriptreact: { ignoredValues: ["Acme"] },
+    },
+    // Manual allow-list. Keep this at the very bottom: the list grows.
+    ignore: [
+      { file: "src/App.tsx", text: "Acme Corp", reason: "Brand name" },
+    ],
+  },
+});
+```
+
+The scanner matches an `ignore` entry by file and exact string. If you change the string, the scanner reports it again. Use the optional `kind` field (`jsx-text`, `jsx-attribute`, `html-text`, or `html-attribute`) when the same text occurs more than once in a file.
+
+The `languages` key accepts these options for each language: `minLength`, `ignoredAttributes`, and `ignoredValues`. Global options apply to all languages. A language option overrides the global option.
+
+### Add a language
+
+A scanner is a small object with a `scan` function. The function receives one file and returns findings. It does no file I/O. Add your scanner to `DEFAULT_SCANNERS` in [`packages/dialekt/src/hardcoded/scan.ts`](packages/dialekt/src/hardcoded/scan.ts). See [`packages/dialekt/src/hardcoded/scanners/jsx.ts`](packages/dialekt/src/hardcoded/scanners/jsx.ts) for a full example.
+
+## Health check with `doctor`
+
+`dialekt doctor` combines the missing-key check and the hardcoded-string scan into one report. It is for humans and AI agents that fix translations.
+
+```bash
+dialekt doctor
+dialekt doctor --skip-missing
+dialekt doctor --skip-hardcoded
+dialekt doctor --format json
+```
+
 ## How it's built
 
 dialekt is written in TypeScript on top of [Effect-TS](https://effect.website). Every file read, every API call, and every parse error is either handled or reported as a typed failure. Nothing gets swallowed in a `catch` block. The architecture is layered:
@@ -166,6 +212,18 @@ npx dialekt unused
 The Paraglide example includes `messages/en.json` and `messages/de.json` with inlang message-format strings (some keys intentionally missing from German). The `unused` command scans `src/lib/i18n.ts` and `src/routes/+page.svelte` for `m.messageName(...)` calls.
 
 > **Note:** Both examples require an `OPENAI_API_KEY` (or equivalent) in your environment. The `translate` command makes real API calls. Use `--fast` for cheaper runs.
+
+### React example
+
+The React example shows `hardcoded` and `doctor` on JSX and TSX files. It has no locale adapter, so `doctor` reports only hardcoded strings. The example config shows an ignored value ("OK") and a manual ignore entry.
+
+```bash
+cd examples/react
+npx dialekt hardcoded
+npx dialekt doctor --skip-missing
+```
+
+The Laravel example also has raw strings in `resources/views/welcome.blade.php`. Run the same commands there to see Blade findings.
 
 ## Development
 

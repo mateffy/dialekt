@@ -18,33 +18,26 @@ export interface MissingFlags {
 
 export type MissingKeysEntry = MissingKeyEntry;
 
-export function runMissing(
-  flags: MissingFlags,
-  configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
-  missingKeysComputer: (
-    adapter: TranslationAdapter,
-    sourceLocale: string,
-    targetLocales: readonly string[],
-  ) => Effect.Effect<readonly MissingKeysEntry[], unknown> = computeMissingKeys,
-  logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
-): Effect.Effect<void, never> {
-  return Effect.gen(function* () {
-    const loaded = yield* configLoader(flags.config);
-    const effective = resolveEffectiveConfig(
-      {
-        baseLanguage: Option.getOrUndefined(flags.baseLanguage),
-        language: Option.isSome(flags.language) ? [flags.language.value] : undefined,
-        adapter: Option.getOrUndefined(flags.adapter),
-      },
-      loaded,
-    );
+export interface MissingEntry {
+  readonly adapter: string;
+  readonly locale: string;
+  readonly resource: string;
+  readonly key: string;
+}
 
-    const allEntries: Array<{
-      adapter: string;
-      locale: string;
-      resource: string;
-      key: string;
-    }> = [];
+export type MissingKeysComputer = (
+  adapter: TranslationAdapter,
+  sourceLocale: string,
+  targetLocales: readonly string[],
+) => Effect.Effect<readonly MissingKeysEntry[], unknown>;
+
+/** Resolve every missing key across all adapters into flat CLI entries. */
+export function collectMissingEntries(
+  effective: DialektConfig,
+  missingKeysComputer: MissingKeysComputer = computeMissingKeys,
+): Effect.Effect<readonly MissingEntry[], unknown> {
+  return Effect.gen(function* () {
+    const allEntries: MissingEntry[] = [];
 
     for (const a of effective.adapters) {
       const sourceLocale = effective.sourceLocale;
@@ -66,6 +59,29 @@ export function runMissing(
         }
       }
     }
+
+    return allEntries;
+  });
+}
+
+export function runMissing(
+  flags: MissingFlags,
+  configLoader: (path: string) => Effect.Effect<DialektConfig, unknown> = loadConfig,
+  missingKeysComputer: MissingKeysComputer = computeMissingKeys,
+  logger: (msg: string) => Effect.Effect<void> = (msg: string) => Console.log(msg),
+): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const loaded = yield* configLoader(flags.config);
+    const effective = resolveEffectiveConfig(
+      {
+        baseLanguage: Option.getOrUndefined(flags.baseLanguage),
+        language: Option.isSome(flags.language) ? [flags.language.value] : undefined,
+        adapter: Option.getOrUndefined(flags.adapter),
+      },
+      loaded,
+    );
+
+    const allEntries = yield* collectMissingEntries(effective, missingKeysComputer);
 
     const format = detectFormat(
       flags.format !== undefined

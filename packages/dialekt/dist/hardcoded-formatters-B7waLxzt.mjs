@@ -1,10 +1,564 @@
 import { Data, Effect, Schedule } from "effect";
 import { FileSystem, Path } from "@effect/platform";
+import { NodeContext } from "@effect/platform-node";
+import { parse } from "@ast-grep/napi";
 import { Output, ToolLoopAgent, generateText, hasToolCall, tool } from "ai";
 import { z } from "zod";
 import { createJiti } from "jiti";
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+//#region src/hardcoded/types.ts
+var HardcodedScanError = class extends Data.TaggedError("HardcodedScanError") {};
+//#endregion
+//#region src/sdk/node-layer.ts
+/**
+* The only file in this package (besides cli/main.ts) permitted to know
+* this is running on Node.js. Provides FileSystem, Path, and
+* CommandExecutor. Swapping to Bun/Deno later means swapping this one
+* import for @effect/platform-bun's equivalent — nothing else changes.
+*/
+const NodePlatformLayer = NodeContext.layer;
+//#endregion
+//#region src/hardcoded/filter.ts
+/**
+* Attributes whose values are almost always technical (class names, identifiers,
+* routes, handlers). Translatable attributes such as `alt`, `title`,
+* `placeholder`, `label` and `aria-label` are deliberately absent so they get
+* reported.
+*/
+const DEFAULT_IGNORED_ATTRIBUTES = [
+	"accept",
+	"acceptCharset",
+	"action",
+	"align",
+	"allow",
+	"allowFullScreen",
+	"as",
+	"async",
+	"autoComplete",
+	"autoFocus",
+	"autoPlay",
+	"capture",
+	"cellPadding",
+	"cellSpacing",
+	"charSet",
+	"checked",
+	"cite",
+	"class",
+	"className",
+	"colSpan",
+	"cols",
+	"content",
+	"contentEditable",
+	"controls",
+	"coords",
+	"crossOrigin",
+	"data",
+	"dateTime",
+	"decoding",
+	"default",
+	"defaultChecked",
+	"defaultValue",
+	"defer",
+	"dir",
+	"disabled",
+	"download",
+	"draggable",
+	"encType",
+	"enterKeyHint",
+	"fetchPriority",
+	"fill",
+	"form",
+	"formAction",
+	"headers",
+	"height",
+	"hidden",
+	"high",
+	"href",
+	"hrefLang",
+	"htmlFor",
+	"httpEquiv",
+	"id",
+	"inputMode",
+	"integrity",
+	"kind",
+	"lang",
+	"list",
+	"loading",
+	"loop",
+	"low",
+	"max",
+	"maxLength",
+	"media",
+	"method",
+	"min",
+	"minLength",
+	"multiple",
+	"muted",
+	"name",
+	"noValidate",
+	"open",
+	"optimum",
+	"pattern",
+	"ping",
+	"playsInline",
+	"poster",
+	"preload",
+	"readOnly",
+	"referrerPolicy",
+	"rel",
+	"required",
+	"reversed",
+	"role",
+	"rowSpan",
+	"rows",
+	"sandbox",
+	"scope",
+	"selected",
+	"shape",
+	"size",
+	"slot",
+	"span",
+	"spellCheck",
+	"src",
+	"srcDoc",
+	"srcLang",
+	"srcSet",
+	"start",
+	"step",
+	"stroke",
+	"strokeWidth",
+	"style",
+	"tabIndex",
+	"target",
+	"translate",
+	"type",
+	"useMap",
+	"value",
+	"viewBox",
+	"width",
+	"wrap",
+	"xmlns"
+];
+const TRANSLATABLE_ARIA_ATTRIBUTES = /* @__PURE__ */ new Set([
+	"aria-description",
+	"aria-label",
+	"aria-placeholder",
+	"aria-roledescription",
+	"aria-valuetext"
+]);
+const FRAMEWORK_ATTRIBUTE_PREFIXES = [
+	"wire:",
+	"x-",
+	"@",
+	":",
+	"v-",
+	"bind:",
+	"on:",
+	"use:",
+	"transition:",
+	"in:",
+	"out:",
+	"animate:",
+	"class:",
+	"style:",
+	"let:"
+];
+const EVENT_HANDLER_RE = /^on[A-Z]/;
+const URL_RE = /^(?:[a-z][a-z0-9+.-]*:)?\/\//i;
+const TECHNICAL_CHARS_RE = /[{}<>;=|\\`[\]()]/;
+const LETTER_RE = /\p{L}/u;
+const WHITESPACE_RE = /\s/;
+const NUMERIC_RE = /^[\d\s.,:%+-]+$/;
+const CONSTANT_RE = /^[A-Z][A-Z0-9_]*$/;
+const CSS_CLASS_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/i;
+const IDENTIFIER_RE = /^[a-z0-9]+(?:[._-][a-z0-9]+)+$/i;
+const BLADE_DIRECTIVE_RE = /^(?:@|#)/;
+const DEFAULT_HARDCODED_MIN_LENGTH = 2;
+/** Merge global config, per-language overrides and defaults for one language. */
+function resolveHardcodedOptions(config, language) {
+	const languageConfig = config?.languages?.[language];
+	const ignoredAttributes = new Set(config?.ignoredAttributes ?? DEFAULT_IGNORED_ATTRIBUTES);
+	for (const attribute of languageConfig?.ignoredAttributes ?? []) ignoredAttributes.add(attribute);
+	const ignoredValues = /* @__PURE__ */ new Set();
+	for (const value of config?.ignoredValues ?? []) ignoredValues.add(value.toLowerCase());
+	for (const value of languageConfig?.ignoredValues ?? []) ignoredValues.add(value.toLowerCase());
+	return {
+		minLength: languageConfig?.minLength ?? config?.minLength ?? 2,
+		ignoredAttributes,
+		ignoredValues
+	};
+}
+function isIgnoredAttribute(name, options) {
+	if (options.ignoredAttributes.has(name)) return true;
+	if (name.startsWith("data-")) return true;
+	if (name.startsWith("aria-")) return !TRANSLATABLE_ARIA_ATTRIBUTES.has(name);
+	if (EVENT_HANDLER_RE.test(name)) return true;
+	return FRAMEWORK_ATTRIBUTE_PREFIXES.some((prefix) => name.startsWith(prefix));
+}
+/**
+* Heuristic gate for "is this string worth translating?". It intentionally
+* errs on the side of reporting and lets config prune the rest.
+*/
+function isLikelyTranslatable(text, options) {
+	const value = text.trim();
+	if (value.length < options.minLength) return false;
+	if (options.ignoredValues.has(value.toLowerCase())) return false;
+	if (!LETTER_RE.test(value)) return false;
+	if (TECHNICAL_CHARS_RE.test(value)) return false;
+	if (URL_RE.test(value)) return false;
+	if (NUMERIC_RE.test(value)) return false;
+	if (CONSTANT_RE.test(value)) return false;
+	if (BLADE_DIRECTIVE_RE.test(value)) return false;
+	if (value.startsWith("/") || value.startsWith(".") || value.includes("://")) return false;
+	if (WHITESPACE_RE.test(value)) return true;
+	if (value.includes("@") || value.includes(":") || value.includes("\\")) return false;
+	if (value.includes(".")) return false;
+	if (CSS_CLASS_RE.test(value)) return false;
+	return !IDENTIFIER_RE.test(value);
+}
+//#endregion
+//#region src/hardcoded/ast.ts
+const NEWLINE = 10;
+const FIRST_LINE = 1;
+/** Parse `content` with the tree-sitter grammar registered under `language`. */
+function parseSource(language, content) {
+	return parse(language, content).root();
+}
+/** Depth-first pre-order traversal. Return `false` from `visit` to skip a subtree. */
+function walkAst(node, visit) {
+	if (visit(node) === false) return;
+	for (const child of node.children()) walkAst(child, visit);
+}
+/** Find the first descendant (including `node`) matching `predicate`. */
+function findFirst(node, predicate) {
+	if (predicate(node)) return node;
+	for (const child of node.children()) {
+		const found = findFirst(child, predicate);
+		if (found !== null) return found;
+	}
+	return null;
+}
+function positionAt(content, index) {
+	const bounded = Math.max(0, Math.min(index, content.length));
+	let line = FIRST_LINE;
+	let lineStart = 0;
+	for (let i = 0; i < bounded; i += 1) if (content.charCodeAt(i) === NEWLINE) {
+		line += 1;
+		lineStart = i + 1;
+	}
+	return {
+		line,
+		column: bounded - lineStart + 1
+	};
+}
+/** Trim `raw` and express the result as absolute character indices in the file. */
+function trimSlice(raw, absoluteStart) {
+	const leading = raw.length - raw.trimStart().length;
+	const trimmed = raw.trim();
+	if (trimmed.length === 0) return null;
+	const start = absoluteStart + leading;
+	return {
+		text: trimmed.replace(/\s+/g, " "),
+		start,
+		end: start + trimmed.length - 1
+	};
+}
+/** Turn an absolute slice into a located finding. */
+function toFinding(args) {
+	const start = positionAt(args.content, args.slice.start);
+	const end = positionAt(args.content, args.slice.end);
+	const finding = {
+		file: args.file,
+		line: start.line,
+		column: start.column,
+		endLine: end.line,
+		endColumn: end.column,
+		text: args.slice.text,
+		kind: args.kind,
+		language: args.language,
+		confidence: args.confidence
+	};
+	return args.attribute === void 0 ? finding : {
+		...finding,
+		attribute: args.attribute
+	};
+}
+//#endregion
+//#region src/hardcoded/scanners/jsx.ts
+/** Components that already route their children through a translator. */
+const TRANSLATION_COMPONENTS = /* @__PURE__ */ new Set([
+	"Trans",
+	"Translate",
+	"FormattedMessage",
+	"FormattedHTMLMessage"
+]);
+/** Elements whose text content is code or markup, never UI copy. */
+const NON_TRANSLATABLE_ELEMENTS = /* @__PURE__ */ new Set([
+	"code",
+	"pre",
+	"script",
+	"style",
+	"kbd",
+	"samp"
+]);
+const JSX_LANGUAGES = [
+	"javascript",
+	"javascriptreact",
+	"typescript",
+	"typescriptreact"
+];
+const GRAMMAR_BY_LANGUAGE = {
+	javascript: "js",
+	javascriptreact: "jsx",
+	typescript: "ts",
+	typescriptreact: "tsx"
+};
+const NAME_KINDS = /* @__PURE__ */ new Set([
+	"identifier",
+	"member_expression",
+	"jsx_namespaced_name",
+	"nested_identifier",
+	"property_identifier"
+]);
+const STRING_CONTENT_KINDS = /* @__PURE__ */ new Set(["string_fragment", "string_content"]);
+function nameFromElement(node) {
+	const nameNode = node.children().find((child) => NAME_KINDS.has(child.kind()));
+	return nameNode === void 0 ? null : nameNode.text();
+}
+function elementName(node) {
+	if (node.kind() === "jsx_element") {
+		const opening = node.children().find((child) => child.kind() === "jsx_opening_element");
+		return opening === void 0 ? null : nameFromElement(opening);
+	}
+	return nameFromElement(node);
+}
+function stringContent(node) {
+	return node.children().find((child) => STRING_CONTENT_KINDS.has(child.kind())) ?? null;
+}
+function scanText$1(node, input, findings) {
+	const slice = trimSlice(node.text(), node.range().start.index);
+	if (slice === null || !isLikelyTranslatable(slice.text, input.options)) return;
+	findings.push(toFinding({
+		file: input.file,
+		language: input.language,
+		kind: "jsx-text",
+		content: input.content,
+		slice,
+		confidence: .9
+	}));
+}
+function scanAttribute$1(node, input, findings) {
+	const nameNode = node.children().find((child) => child.kind() === "property_identifier");
+	const valueNode = node.children().find((child) => child.kind() === "string" || child.kind() === "template_string");
+	if (nameNode === void 0 || valueNode === void 0) return;
+	const attribute = nameNode.text();
+	if (isIgnoredAttribute(attribute, input.options)) return;
+	const content = stringContent(valueNode);
+	if (content === null) return;
+	const slice = trimSlice(content.text(), content.range().start.index);
+	if (slice === null || !isLikelyTranslatable(slice.text, input.options)) return;
+	findings.push(toFinding({
+		file: input.file,
+		language: input.language,
+		kind: "jsx-attribute",
+		content: input.content,
+		slice,
+		confidence: .7,
+		attribute
+	}));
+}
+function scanJsx(input) {
+	const root = parseSource(GRAMMAR_BY_LANGUAGE[input.language] ?? "tsx", input.content);
+	const findings = [];
+	walkAst(root, (node) => {
+		const kind = node.kind();
+		if (kind === "jsx_element" || kind === "jsx_self_closing_element") {
+			const name = elementName(node);
+			if (name !== null && (TRANSLATION_COMPONENTS.has(name) || NON_TRANSLATABLE_ELEMENTS.has(name))) return false;
+		}
+		if (kind === "jsx_text") scanText$1(node, input, findings);
+		else if (kind === "jsx_attribute") scanAttribute$1(node, input, findings);
+		return true;
+	});
+	return findings;
+}
+const jsxScanner = {
+	name: "jsx",
+	languages: JSX_LANGUAGES,
+	extensions: [
+		".js",
+		".jsx",
+		".ts",
+		".tsx"
+	],
+	scan: scanJsx
+};
+//#endregion
+//#region src/hardcoded/scanners/blade.ts
+/**
+* Blade expressions (`{{ }}`, `{!! !!}` and `@directive(...)`) are replaced
+* with spaces of the same length. Length is preserved so the trimmed text still
+* maps to the original file offsets.
+*/
+const BLADE_EXPRESSION_RE = /\{\{[\s\S]*?\}\}|\{!![\s\S]*?!!\}|(?<![\w.])@[a-zA-Z]+(?:\s*\([^)]*\))?/g;
+function maskBladeExpressions(raw) {
+	return raw.replace(BLADE_EXPRESSION_RE, (match) => " ".repeat(match.length));
+}
+function scanText(node, input, findings) {
+	const slice = trimSlice(maskBladeExpressions(node.text()), node.range().start.index);
+	if (slice === null || !isLikelyTranslatable(slice.text, input.options)) return;
+	findings.push(toFinding({
+		file: input.file,
+		language: input.language,
+		kind: "html-text",
+		content: input.content,
+		slice,
+		confidence: .85
+	}));
+}
+function scanAttribute(node, input, findings) {
+	const nameNode = node.children().find((child) => child.kind() === "attribute_name");
+	const valueNode = findFirst(node, (child) => child.kind() === "attribute_value");
+	if (nameNode === void 0 || valueNode === null) return;
+	const attribute = nameNode.text();
+	if (isIgnoredAttribute(attribute, input.options)) return;
+	const slice = trimSlice(valueNode.text(), valueNode.range().start.index);
+	if (slice === null || !isLikelyTranslatable(slice.text, input.options)) return;
+	findings.push(toFinding({
+		file: input.file,
+		language: input.language,
+		kind: "html-attribute",
+		content: input.content,
+		slice,
+		confidence: .7,
+		attribute
+	}));
+}
+function scanBlade(input) {
+	const root = parseSource("html", input.content);
+	const findings = [];
+	walkAst(root, (node) => {
+		const kind = node.kind();
+		if (kind === "text") scanText(node, input, findings);
+		else if (kind === "attribute") scanAttribute(node, input, findings);
+		return true;
+	});
+	return findings;
+}
+const bladeScanner = {
+	name: "blade",
+	languages: ["blade"],
+	extensions: [".blade.php"],
+	scan: scanBlade
+};
+//#endregion
+//#region src/hardcoded/scan.ts
+const DEFAULT_SCANNERS = [jsxScanner, bladeScanner];
+const SKIPPED_DIRECTORIES = /* @__PURE__ */ new Set([
+	".cache",
+	".git",
+	".next",
+	".nuxt",
+	".svelte-kit",
+	".turbo",
+	"build",
+	"coverage",
+	"dist",
+	"node_modules",
+	"storage",
+	"vendor"
+]);
+const EXTENSION_LANGUAGE = [
+	[".blade.php", "blade"],
+	[".tsx", "typescriptreact"],
+	[".jsx", "javascriptreact"],
+	[".ts", "typescript"],
+	[".js", "javascript"]
+];
+const SCAN_CONCURRENCY = 10;
+function languageForFile(file) {
+	const lower = file.toLowerCase();
+	for (const [extension, language] of EXTENSION_LANGUAGE) if (lower.endsWith(extension)) return language;
+	return null;
+}
+function normalizePath(value) {
+	return value.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+function isIgnoredFinding(finding, ignore) {
+	const file = normalizePath(finding.file);
+	return ignore.some((entry) => {
+		if (entry.text !== finding.text) return false;
+		if (entry.kind !== void 0 && entry.kind !== finding.kind) return false;
+		const pattern = normalizePath(entry.file);
+		return file === pattern || file.endsWith(`/${pattern}`);
+	});
+}
+function isSkippedFile(relativePath) {
+	return normalizePath(relativePath).split("/").some((segment) => SKIPPED_DIRECTORIES.has(segment));
+}
+function scannerFor(language, scanners) {
+	return scanners.find((candidate) => candidate.languages.includes(language)) ?? null;
+}
+function dedupeAndSort(findings) {
+	const seen = /* @__PURE__ */ new Set();
+	const unique = [];
+	for (const finding of findings) {
+		const key = `${finding.file}:${finding.line}:${finding.column}:${finding.kind}:${finding.text}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		unique.push(finding);
+	}
+	return unique.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column);
+}
+function scanHardcoded(options) {
+	return Effect.gen(function* () {
+		const fs = yield* FileSystem.FileSystem;
+		const path = yield* Path.Path;
+		const scanners = options.scanners ?? DEFAULT_SCANNERS;
+		const findings = [];
+		for (const scanPath of options.scanPaths) {
+			if (!(yield* fs.exists(scanPath).pipe(Effect.orElseSucceed(() => false)))) continue;
+			const files = (yield* fs.readDirectory(scanPath, { recursive: true }).pipe(Effect.orElseSucceed(() => []))).map((entry) => ({
+				entry,
+				language: languageForFile(entry)
+			})).filter((candidate) => !isSkippedFile(candidate.entry) && candidate.language !== null);
+			const perFile = yield* Effect.forEach(files, (candidate) => Effect.gen(function* () {
+				const scanner = scannerFor(candidate.language, scanners);
+				if (scanner === null) return [];
+				const filePath = path.join(scanPath, candidate.entry);
+				const content = yield* fs.readFileString(filePath).pipe(Effect.orElseSucceed(() => null));
+				if (content === null) return [];
+				const file = normalizePath(filePath);
+				return yield* Effect.try({
+					try: () => scanner.scan({
+						file,
+						language: candidate.language,
+						content,
+						options: resolveHardcodedOptions(options.config, candidate.language)
+					}),
+					catch: (cause) => new HardcodedScanError({
+						path: file,
+						cause
+					})
+				});
+			}), { concurrency: SCAN_CONCURRENCY });
+			for (const result of perFile) for (const finding of result) findings.push(finding);
+		}
+		return dedupeAndSort(findings.filter((finding) => !isIgnoredFinding(finding, options.ignore ?? [])));
+	});
+}
+/** Scan a project using `config.hardcoded`, with all platform services provided. */
+function scanProjectHardcoded(config) {
+	const hardcoded = config.hardcoded;
+	if (hardcoded?.enabled === false) return Effect.succeed([]);
+	return scanHardcoded({
+		scanPaths: hardcoded?.scanPaths ?? ["."],
+		config: hardcoded,
+		ignore: hardcoded?.ignore ?? []
+	}).pipe(Effect.provide(NodePlatformLayer));
+}
+//#endregion
 //#region src/keys/flatten.ts
 function flattenObject(input, prefix = "") {
 	const output = {};
@@ -547,7 +1101,7 @@ function detectFormat(explicit) {
 	if (AGENT_ENV_VARS.some((k) => process.env[k])) return "json";
 	return "pretty";
 }
-const C$1 = {
+const C$2 = {
 	reset: "\x1B[0m",
 	bold: "\x1B[1m",
 	dim: "\x1B[2m",
@@ -564,7 +1118,7 @@ function isTty() {
 /** Wraps text in ANSI codes only when stdout is a TTY; otherwise returns it bare. */
 function color(text, ...codes) {
 	if (!isTty()) return text;
-	return `${codes.join("")}${text}${C$1.reset}`;
+	return `${codes.join("")}${text}${C$2.reset}`;
 }
 const PRETTY_GLYPHS = {
 	hLine: String.fromCharCode(9472),
@@ -610,7 +1164,7 @@ function drawTable(headers, rows) {
 	const colWidths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)));
 	const pad = (text, width) => text.padEnd(width);
 	const hLine = g.cornerTL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeDown) + g.cornerTR;
-	const headerRow = g.vLine + headers.map((h, i) => ` ${color(pad(h, colWidths[i]), C$1.bold)} `).join(g.vLine) + g.vLine;
+	const headerRow = g.vLine + headers.map((h, i) => ` ${color(pad(h, colWidths[i]), C$2.bold)} `).join(g.vLine) + g.vLine;
 	const separator = g.teeRight + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.cross) + g.teeLeft;
 	const dataRows = rows.map((row) => g.vLine + row.map((cell, i) => ` ${pad(cell, colWidths[i])} `).join(g.vLine) + g.vLine);
 	const bottomLine = g.cornerBL + colWidths.map((w) => g.hLine.repeat(w + 2)).join(g.teeUp) + g.cornerBR;
@@ -626,25 +1180,25 @@ const BANNER_SIDE_PADDING = 4;
 const BANNER_MIN_WIDTH = 40;
 function banner(title) {
 	const line = glyphs().hLine.repeat(Math.max(title.length + BANNER_SIDE_PADDING, BANNER_MIN_WIDTH));
-	return `${color(line, C$1.dim)}\n  ${color(title, C$1.bold + C$1.cyan)}\n${color(line, C$1.dim)}`;
+	return `${color(line, C$2.dim)}\n  ${color(title, C$2.bold + C$2.cyan)}\n${color(line, C$2.dim)}`;
 }
 function sectionHeader(label) {
-	return `\n${color(`${glyphs().arrow} ${label}`, C$1.bold + C$1.cyan)}`;
+	return `\n${color(`${glyphs().arrow} ${label}`, C$2.bold + C$2.cyan)}`;
 }
 function success(text) {
-	return `${color(`${glyphs().check} ${text}`, C$1.green)}`;
+	return `${color(`${glyphs().check} ${text}`, C$2.green)}`;
 }
 function failure(text) {
-	return `${color(`${glyphs().crossMark} ${text}`, C$1.red)}`;
+	return `${color(`${glyphs().crossMark} ${text}`, C$2.red)}`;
 }
 function warning(text) {
-	return `${color(`${glyphs().warn} ${text}`, C$1.yellow)}`;
+	return `${color(`${glyphs().warn} ${text}`, C$2.yellow)}`;
 }
 function info(text) {
-	return color(text, C$1.dim);
+	return color(text, C$2.dim);
 }
 function keyValue(key, value) {
-	return `  ${color(key, C$1.bold)} ${value}`;
+	return `  ${color(key, C$2.bold)} ${value}`;
 }
 //#endregion
 //#region src/cli/formatters.ts
@@ -654,7 +1208,7 @@ function keyValue(key, value) {
 * Imports the core utilities from `format.ts` and builds structured
 * pretty / JSON renderers for each dialekt command.
 */
-const C = {
+const C$1 = {
 	reset: "\x1B[0m",
 	bold: "\x1B[1m",
 	dim: "\x1B[2m",
@@ -664,8 +1218,8 @@ const C = {
 	blue: "\x1B[34m",
 	cyan: "\x1B[36m"
 };
-const D = C.dim;
-const W = C.reset;
+const D = C$1.dim;
+const W = C$1.reset;
 function formatMissingKeys(entries, format) {
 	if (format === "json") return JSON.stringify(entries, null, 2) + "\n";
 	if (entries.length === 0) return success("All translations are complete. No missing keys.") + "\n";
@@ -686,14 +1240,14 @@ function formatMissingKeys(entries, format) {
 	for (const [adapter, byLocale] of grouped) {
 		let adapterTotal = 0;
 		for (const byResource of byLocale.values()) for (const keys of byResource.values()) adapterTotal += keys.length;
-		lines.push(`\n  ${color(adapter, C.bold + C.blue)} ${color(`(${adapterTotal})`, C.dim)}`);
+		lines.push(`\n  ${color(adapter, C$1.bold + C$1.blue)} ${color(`(${adapterTotal})`, C$1.dim)}`);
 		for (const [locale, byResource] of byLocale) {
 			let localeTotal = 0;
 			for (const keys of byResource.values()) localeTotal += keys.length;
-			lines.push(`    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`);
+			lines.push(`    ${color(`${g.arrow} ${locale}`, C$1.yellow)} ${color(`(${localeTotal})`, C$1.dim)}`);
 			for (const [resource, keys] of byResource) {
-				lines.push(`      ${color(resource, C.bold)}`);
-				for (const key of keys) lines.push(`        ${color(g.bullet, C.dim)} ${key}`);
+				lines.push(`      ${color(resource, C$1.bold)}`);
+				for (const key of keys) lines.push(`        ${color(g.bullet, C$1.dim)} ${key}`);
 			}
 		}
 	}
@@ -719,14 +1273,14 @@ function formatUnusedKeys(entries, format) {
 	for (const [adapter, byLocale] of grouped) {
 		let adapterTotal = 0;
 		for (const byResource of byLocale.values()) for (const keys of byResource.values()) adapterTotal += keys.length;
-		lines.push(`\n  ${color(adapter, C.bold + C.blue)} ${color(`(${adapterTotal})`, C.dim)}`);
+		lines.push(`\n  ${color(adapter, C$1.bold + C$1.blue)} ${color(`(${adapterTotal})`, C$1.dim)}`);
 		for (const [locale, byResource] of byLocale) {
 			let localeTotal = 0;
 			for (const keys of byResource.values()) localeTotal += keys.length;
-			lines.push(`    ${color(`${g.arrow} ${locale}`, C.yellow)} ${color(`(${localeTotal})`, C.dim)}`);
+			lines.push(`    ${color(`${g.arrow} ${locale}`, C$1.yellow)} ${color(`(${localeTotal})`, C$1.dim)}`);
 			for (const [resource, keys] of byResource) {
-				lines.push(`      ${color(resource, C.bold)}`);
-				for (const key of keys) lines.push(`        ${color(g.bullet, C.dim)} ${key}`);
+				lines.push(`      ${color(resource, C$1.bold)}`);
+				for (const key of keys) lines.push(`        ${color(g.bullet, C$1.dim)} ${key}`);
 			}
 		}
 	}
@@ -751,7 +1305,7 @@ function formatValidate(result, format) {
 		"Missing"
 	], rows));
 	lines.push("");
-	lines.push(color(`Run ${color("dialekt translate", C.bold + C.cyan)} to fill missing keys.`, C.dim));
+	lines.push(color(`Run ${color("dialekt translate", C$1.bold + C$1.cyan)} to fill missing keys.`, C$1.dim));
 	return lines.join("\n") + "\n";
 }
 function formatLanguages(entries, format) {
@@ -760,8 +1314,8 @@ function formatLanguages(entries, format) {
 	const lines = [];
 	const g = glyphs();
 	for (const e of entries) {
-		lines.push(`  ${color(e.adapter, C.bold + C.blue)}`);
-		lines.push(`    ${color(`${g.arrow}`, C.dim)} ${e.locales.join(color(", ", C.dim))}`);
+		lines.push(`  ${color(e.adapter, C$1.bold + C$1.blue)}`);
+		lines.push(`    ${color(`${g.arrow}`, C$1.dim)} ${e.locales.join(color(", ", C$1.dim))}`);
 	}
 	return lines.join("\n") + "\n";
 }
@@ -793,8 +1347,8 @@ function formatTranslate(result, format) {
 				lines.push("");
 				lines.push(D + "  locale       translated  remaining" + W);
 				for (const [loc, { translated, remaining }] of Object.entries(result.stats.perLocale).sort()) {
-					const t = translated > 0 ? C.green + String(translated) + W : D + "—" + W;
-					const r = remaining > 0 ? C.yellow + String(remaining) + W : C.green + "0" + W;
+					const t = translated > 0 ? C$1.green + String(translated) + W : D + "—" + W;
+					const r = remaining > 0 ? C$1.yellow + String(remaining) + W : C$1.green + "0" + W;
 					lines.push(`  ${padEnd(loc, 12)} ${t}        ${r}`);
 				}
 			}
@@ -819,8 +1373,8 @@ function formatAdd(result, format) {
 		const lines = [success(result.message)];
 		if (result.addedResources && result.addedResources.length > 0) {
 			lines.push("");
-			lines.push(color("Added to:", C.dim));
-			for (const r of result.addedResources) lines.push(`  ${color(glyphs().bullet, C.dim)} ${r}`);
+			lines.push(color("Added to:", C$1.dim));
+			for (const r of result.addedResources) lines.push(`  ${color(glyphs().bullet, C$1.dim)} ${r}`);
 		}
 		return lines.join("\n") + "\n";
 	}
@@ -838,14 +1392,14 @@ function formatInit(result, format) {
 	if (result.packageManager) lines.push(keyValue("Package manager:", result.packageManager));
 	if (result.installed && result.installed.length > 0) {
 		lines.push("");
-		lines.push(color("Installed:", C.dim));
-		for (const pkg of result.installed) lines.push(`  ${color(glyphs().bullet, C.dim)} ${pkg}`);
+		lines.push(color("Installed:", C$1.dim));
+		for (const pkg of result.installed) lines.push(`  ${color(glyphs().bullet, C$1.dim)} ${pkg}`);
 	}
 	if (result.skippedInstall) {
 		lines.push("");
 		if (result.installCommands && result.installCommands.length > 0) {
-			lines.push(color("Run the following to install:", C.dim));
-			for (const cmd of result.installCommands) lines.push(`  ${color(`$ ${cmd}`, C.cyan)}`);
+			lines.push(color("Run the following to install:", C$1.dim));
+			for (const cmd of result.installCommands) lines.push(`  ${color(`$ ${cmd}`, C$1.cyan)}`);
 		} else lines.push(info("Install skipped. Run your package manager manually to install the packages above."));
 	}
 	return lines.join("\n") + "\n";
@@ -880,4 +1434,54 @@ function padEnd(s, n) {
 	return s.length >= n ? s : s + " ".repeat(n - s.length);
 }
 //#endregion
-export { UnknownProviderError as A, computeMissingKeys as C, buildSystemPrompt as D, createOneShotStrategy as E, diffKeys as F, flattenObject as I, unflattenObject as L, readFileIfExists as M, writeFileEnsuringDir as N, buildUserPrompt as O, chunkKeys as P, loadConfig as S, createToolLoopStrategy as T, keyValue as _, formatLanguages as a, warning as b, formatUnusedKeys as c, color as d, detectFormat as f, info as g, glyphs as h, formatInit as i, resolveModel as j, TranslationFailedError as k, formatValidate as l, failure as m, formatBenchmark as n, formatMissingKeys as o, drawTable as p, formatError as r, formatTranslate as s, formatAdd as t, banner as u, sectionHeader as v, runTranslation as w, ConfigLoadError as x, success as y };
+//#region src/cli/hardcoded-formatters.ts
+const C = {
+	reset: "\x1B[0m",
+	bold: "\x1B[1m",
+	dim: "\x1B[2m",
+	cyan: "\x1B[36m",
+	yellow: "\x1B[33m"
+};
+function formatHardcoded(findings, format) {
+	if (format === "json") return JSON.stringify(findings, null, 2) + "\n";
+	if (findings.length === 0) return success("No hardcoded strings found.") + "\n";
+	const byFile = /* @__PURE__ */ new Map();
+	for (const finding of findings) {
+		const list = byFile.get(finding.file) ?? [];
+		list.push(finding);
+		byFile.set(finding.file, list);
+	}
+	const g = glyphs();
+	const lines = [`\n${color(`${g.arrow} Hardcoded strings (${findings.length})`, C.bold + C.cyan)}`];
+	for (const [file, fileFindings] of byFile) {
+		lines.push(`\n  ${color(file, C.bold)} ${color(`(${fileFindings.length})`, C.dim)}`);
+		for (const finding of fileFindings) {
+			const location = `${finding.line}:${finding.column}`;
+			const label = finding.attribute === void 0 ? finding.kind : `${finding.kind}:${finding.attribute}`;
+			lines.push(`    ${color(g.bullet, C.dim)} ${color(location.padEnd(10), C.yellow)} ${color(label, C.dim)}  ${finding.text}`);
+		}
+	}
+	return lines.join("\n") + "\n";
+}
+function formatDoctor(result, format) {
+	if (format === "json") return JSON.stringify({
+		missing: result.missing,
+		hardcoded: result.hardcoded,
+		summary: {
+			missing: result.missing.length,
+			hardcoded: result.hardcoded.length
+		}
+	}, null, 2) + "\n";
+	const lines = [banner("dialekt doctor")];
+	if (result.skipped.hardcoded) lines.push(info("  Hardcoded-string scan skipped."));
+	else lines.push(formatHardcoded(result.hardcoded, "pretty").trimEnd());
+	if (result.skipped.missing) lines.push(info("  Missing-key check skipped."));
+	else lines.push(formatMissingKeys(result.missing, "pretty").trimEnd());
+	const total = result.missing.length + result.hardcoded.length;
+	lines.push("");
+	if (total === 0) lines.push(success("No translation issues found."));
+	else lines.push(color(`Found ${result.missing.length} missing key(s) and ${result.hardcoded.length} hardcoded string(s).`, C.bold + C.yellow));
+	return lines.join("\n") + "\n";
+}
+//#endregion
+export { NodePlatformLayer as $, buildUserPrompt as A, DEFAULT_SCANNERS as B, ConfigLoadError as C, createToolLoopStrategy as D, runTranslation as E, writeFileEnsuringDir as F, scanProjectHardcoded as G, languageForFile as H, chunkKeys as I, DEFAULT_HARDCODED_MIN_LENGTH as J, bladeScanner as K, diffKeys as L, UnknownProviderError as M, resolveModel as N, createOneShotStrategy as O, readFileIfExists as P, resolveHardcodedOptions as Q, flattenObject as R, warning as S, computeMissingKeys as T, normalizePath as U, isIgnoredFinding as V, scanHardcoded as W, isIgnoredAttribute as X, DEFAULT_IGNORED_ATTRIBUTES as Y, isLikelyTranslatable as Z, glyphs as _, formatError as a, sectionHeader as b, formatMissingKeys as c, formatValidate as d, HardcodedScanError as et, banner as f, failure as g, drawTable as h, formatBenchmark as i, TranslationFailedError as j, buildSystemPrompt as k, formatTranslate as l, detectFormat as m, formatHardcoded as n, formatInit as o, color as p, jsxScanner as q, formatAdd as r, formatLanguages as s, formatDoctor as t, formatUnusedKeys as u, info as v, loadConfig as w, success as x, keyValue as y, unflattenObject as z };

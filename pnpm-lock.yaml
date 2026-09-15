@@ -382,6 +382,9 @@ importers:
       '@ai-sdk/openai':
         specifier: ^4.0.4
         version: 4.0.4(zod@3.25.76)
+      '@ast-grep/napi':
+        specifier: ^0.44.0
+        version: 0.44.0
       '@effect/cli':
         specifier: ^0.75.0
         version: 0.75.2(@effect/platform@0.96.2(effect@3.21.4))(@effect/printer-ansi@0.49.0(@effect/typeclass@0.40.0(effect@3.21.4))(effect@3.21.4))(@effect/printer@0.49.0(@effect/typeclass@0.40.0(effect@3.21.4))(effect@3.21.4))(effect@3.21.4)
@@ -419,6 +422,10 @@ importers:
       vitest:
         specifier: ^4.0.0
         version: 4.1.9(@types/node@26.0.1)(vite@8.1.1(@types/node@26.0.1)(jiti@2.7.0)(yaml@2.9.0))
+    optionalDependencies:
+      '@ast-grep/lang-php':
+        specifier: ^0.0.7
+        version: 0.0.7
 
 packages:
 

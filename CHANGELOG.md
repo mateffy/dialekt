@@ -5,6 +5,21 @@ All notable changes to **dialekt** and the `@dialekt/*` packages are documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`dialekt hardcoded`** scans JS, TS, JSX, TSX, and Blade source files for
+  raw, untranslated strings. It uses ast-grep tree-sitter grammars and
+  reports JSX text, JSX attributes, Blade text, and Blade attributes.
+- **`dialekt doctor`** combines missing keys and hardcoded strings in one
+  report. Use `--skip-missing` or `--skip-hardcoded` to hide a section.
+- A low-level `HardcodedScanner` interface. Add a new language by exporting
+  one scanner object.
+- `hardcoded` config options: `scanPaths`, `minLength`, `ignoredAttributes`,
+  `ignoredValues`, per-language overrides, and a bottom-of-file `ignore`
+  list.
+
 ## [1.0.2] — 2026-09-05
 
 ### Changed

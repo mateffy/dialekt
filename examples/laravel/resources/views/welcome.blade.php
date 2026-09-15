@@ -60,5 +60,12 @@
             <button type="submit">{{ __('Delete account') }}</button>
         </form>
     </div>
+
+    <div>
+        <h2>Frequently asked questions</h2>
+        <p>Everything you need to know about your account.</p>
+        <input type="text" name="help-search" placeholder="Search help articles">
+        <span>FAQ</span>
+    </div>
 </body>
 </html>

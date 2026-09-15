@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
-import { NodeContext } from "@effect/platform-node";
 import { FileSystem, Path } from "@effect/platform";
+import { NodeContext } from "@effect/platform-node";
 import { LanguageModel } from "ai";
 import { PlatformError } from "@effect/platform/Error";
 import { CommandExecutor } from "@effect/platform/CommandExecutor";
@@ -80,6 +80,93 @@ type ModelConfig = LanguageModel | {
 };
 declare function resolveModel(config: ModelConfig): Effect.Effect<LanguageModel, UnknownProviderError>;
 //#endregion
+//#region src/hardcoded/types.d.ts
+/** Where a hardcoded string was found, and what role it plays. */
+type HardcodedKind = "jsx-text" | "jsx-attribute" | "html-text" | "html-attribute";
+/** Language identifiers understood by the bundled scanners. */
+type HardcodedLanguage = "javascript" | "typescript" | "javascriptreact" | "typescriptreact" | "blade";
+interface HardcodedFinding {
+  /** Path relative to the working directory, using forward slashes. */
+  readonly file: string;
+  /** 1-based line of the first character of `text`. */
+  readonly line: number;
+  /** 1-based column of the first character of `text`. */
+  readonly column: number;
+  /** 1-based line of the last character of `text`. */
+  readonly endLine: number;
+  /** 1-based column of the last character of `text`. */
+  readonly endColumn: number;
+  /** The raw, untranslated string, with internal whitespace collapsed. */
+  readonly text: string;
+  readonly kind: HardcodedKind;
+  readonly language: HardcodedLanguage;
+  /** Attribute or prop name when `kind` is an attribute kind. */
+  readonly attribute?: string;
+  /** Scanner confidence in the 0..1 range; text nodes score higher than attributes. */
+  readonly confidence: number;
+}
+/**
+ * A reviewed, deliberately untranslated string. The entry matches by file and
+ * exact text, so editing the string makes the finding appear again.
+ */
+interface HardcodedIgnore {
+  /** File path relative to the working directory. Suffix matching is supported. */
+  readonly file: string;
+  /** Exact raw string that was reviewed and accepted. */
+  readonly text: string;
+  /** Optional kind discriminator for the rare case where text repeats. */
+  readonly kind?: HardcodedKind;
+  /** Free-form note for humans; never used by matching. */
+  readonly reason?: string;
+}
+interface HardcodedLanguageConfig {
+  readonly enabled?: boolean;
+  readonly minLength?: number;
+  readonly ignoredAttributes?: readonly string[];
+  readonly ignoredValues?: readonly string[];
+}
+interface HardcodedConfig {
+  readonly enabled?: boolean;
+  readonly scanPaths?: readonly string[];
+  readonly minLength?: number;
+  readonly ignoredAttributes?: readonly string[];
+  readonly ignoredValues?: readonly string[];
+  /** Per-language overrides keyed by `HardcodedLanguage`. */
+  readonly languages?: Readonly<Record<string, HardcodedLanguageConfig>>;
+  /** Manual allow-list. Keep this at the very bottom: it is expected to grow. */
+  readonly ignore?: readonly HardcodedIgnore[];
+}
+/** Configuration after defaults and per-language overrides are applied. */
+interface ResolvedHardcodedOptions {
+  readonly minLength: number;
+  readonly ignoredAttributes: ReadonlySet<string>;
+  readonly ignoredValues: ReadonlySet<string>;
+}
+interface HardcodedScanInput {
+  readonly file: string;
+  readonly language: HardcodedLanguage;
+  readonly content: string;
+  readonly options: ResolvedHardcodedOptions;
+}
+/**
+ * Low-level extension point for language support. A scanner receives one file
+ * at a time and returns candidate findings without doing any file I/O, so it
+ * is trivial to unit-test and to add a new language.
+ */
+interface HardcodedScanner {
+  readonly name: string;
+  readonly languages: readonly HardcodedLanguage[];
+  readonly extensions: readonly string[];
+  scan(input: HardcodedScanInput): readonly HardcodedFinding[];
+}
+declare const HardcodedScanError_base: new <A extends Record<string, any> = {}>(args: import("effect/Types").VoidIfEmpty<{ readonly [P in keyof A as P extends "_tag" ? never : P]: A[P] }>) => import("effect/Cause").YieldableError & {
+  readonly _tag: "HardcodedScanError";
+} & Readonly<A>;
+declare class HardcodedScanError extends HardcodedScanError_base<{
+  readonly path: string;
+  readonly cause: unknown;
+}> {}
+//#endregion
 //#region src/config/types.d.ts
 interface ChunkingConfig {
   readonly maxTokens: number;
@@ -103,10 +190,51 @@ interface DialektConfig {
   readonly adapters: readonly TranslationAdapter[];
   /** Explicit list of .env files to load before running commands. */
   readonly env?: readonly string[];
+  /** Hardcoded-string detection settings. Keep the `ignore` list at the bottom of the object. */
+  readonly hardcoded?: HardcodedConfig;
 }
 //#endregion
 //#region src/config/define-config.d.ts
 declare function defineConfig(config: DialektConfig): DialektConfig;
+//#endregion
+//#region src/hardcoded/scan.d.ts
+declare const DEFAULT_SCANNERS: readonly HardcodedScanner[];
+interface HardcodedScanOptions {
+  readonly scanPaths: readonly string[];
+  readonly config?: HardcodedConfig | undefined;
+  readonly ignore?: readonly HardcodedIgnore[];
+  readonly scanners?: readonly HardcodedScanner[];
+}
+declare function languageForFile(file: string): HardcodedLanguage | null;
+declare function normalizePath(value: string): string;
+declare function isIgnoredFinding(finding: HardcodedFinding, ignore: readonly HardcodedIgnore[]): boolean;
+declare function scanHardcoded(options: HardcodedScanOptions): Effect.Effect<readonly HardcodedFinding[], HardcodedScanError, FileSystem.FileSystem | Path.Path>;
+/** Scan a project using `config.hardcoded`, with all platform services provided. */
+declare function scanProjectHardcoded(config: DialektConfig): Effect.Effect<readonly HardcodedFinding[], HardcodedScanError>;
+//#endregion
+//#region src/hardcoded/filter.d.ts
+/**
+ * Attributes whose values are almost always technical (class names, identifiers,
+ * routes, handlers). Translatable attributes such as `alt`, `title`,
+ * `placeholder`, `label` and `aria-label` are deliberately absent so they get
+ * reported.
+ */
+declare const DEFAULT_IGNORED_ATTRIBUTES: readonly string[];
+declare const DEFAULT_HARDCODED_MIN_LENGTH = 2;
+/** Merge global config, per-language overrides and defaults for one language. */
+declare function resolveHardcodedOptions(config: HardcodedConfig | undefined, language: string): ResolvedHardcodedOptions;
+declare function isIgnoredAttribute(name: string, options: ResolvedHardcodedOptions): boolean;
+/**
+ * Heuristic gate for "is this string worth translating?". It intentionally
+ * errs on the side of reporting and lets config prune the rest.
+ */
+declare function isLikelyTranslatable(text: string, options: ResolvedHardcodedOptions): boolean;
+//#endregion
+//#region src/hardcoded/scanners/jsx.d.ts
+declare const jsxScanner: HardcodedScanner;
+//#endregion
+//#region src/hardcoded/scanners/blade.d.ts
+declare const bladeScanner: HardcodedScanner;
 //#endregion
 //#region src/keys/flatten.d.ts
 declare function flattenObject(input: Readonly<Record<string, unknown>>, prefix?: string): Record<string, string>;
@@ -416,4 +544,16 @@ interface BenchmarkEntry {
 declare function formatBenchmark(entries: readonly BenchmarkEntry[], format: OutputFormat): string;
 declare function formatError(message: string, format: OutputFormat): string;
 //#endregion
-export { type AdapterCapabilities, AdapterReadError, AdapterWriteError, type AddResult, type BenchmarkEntry, type ChunkingConfig, ConfigLoadError, type DialektConfig, type IcuMessage, type IcuNode, IcuParseError, type IcuPlural, type IcuSelect, type IcuVariable, type LanguageEntry, type MissingKeyEntry, type ModelConfig, NodePlatformLayer, type OutputFormat, PhpExecutionError, type ResourceRef, type RetryConfig, type TranslateResult, type TranslationAdapter, type TranslationContext, TranslationFailedError, type TranslationStrategy, UnknownProviderError, type UnusedKeyEntry, type ValidateEntry, type ValidateResult, banner, buildSystemPrompt, buildUserPrompt, chunkKeys, color, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, detectFormat, diffKeys, drawTable, extractIcuVariables, failure, flattenObject, formatAdd, formatBenchmark, formatError, formatLanguages, formatMissingKeys, formatTranslate, formatUnusedKeys, formatValidate, glyphs, info, keyValue, loadConfig, parseIcuMessage, readFileIfExists, readPhpArrayAsJson, readPhpArraysBatch, resolveModel, runTranslation, sectionHeader, success, unflattenObject, validateIcuPlural, warning, writeFileEnsuringDir };
+//#region src/cli/hardcoded-formatters.d.ts
+declare function formatHardcoded(findings: readonly HardcodedFinding[], format: OutputFormat): string;
+interface DoctorResult {
+  readonly missing: readonly MissingKeyEntry[];
+  readonly hardcoded: readonly HardcodedFinding[];
+  readonly skipped: {
+    readonly missing: boolean;
+    readonly hardcoded: boolean;
+  };
+}
+declare function formatDoctor(result: DoctorResult, format: OutputFormat): string;
+//#endregion
+export { type AdapterCapabilities, AdapterReadError, AdapterWriteError, type AddResult, type BenchmarkEntry, type ChunkingConfig, ConfigLoadError, DEFAULT_HARDCODED_MIN_LENGTH, DEFAULT_IGNORED_ATTRIBUTES, DEFAULT_SCANNERS, type DialektConfig, type DoctorResult, type HardcodedConfig, type HardcodedFinding, type HardcodedIgnore, type HardcodedKind, type HardcodedLanguage, type HardcodedLanguageConfig, HardcodedScanError, type HardcodedScanInput, type HardcodedScanner, type IcuMessage, type IcuNode, IcuParseError, type IcuPlural, type IcuSelect, type IcuVariable, type LanguageEntry, type MissingKeyEntry, type ModelConfig, NodePlatformLayer, type OutputFormat, PhpExecutionError, type ResolvedHardcodedOptions, type ResourceRef, type RetryConfig, type TranslateResult, type TranslationAdapter, type TranslationContext, TranslationFailedError, type TranslationStrategy, UnknownProviderError, type UnusedKeyEntry, type ValidateEntry, type ValidateResult, banner, bladeScanner, buildSystemPrompt, buildUserPrompt, chunkKeys, color, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, detectFormat, diffKeys, drawTable, extractIcuVariables, failure, flattenObject, formatAdd, formatBenchmark, formatDoctor, formatError, formatHardcoded, formatLanguages, formatMissingKeys, formatTranslate, formatUnusedKeys, formatValidate, glyphs, info, isIgnoredAttribute, isIgnoredFinding, isLikelyTranslatable, jsxScanner, keyValue, languageForFile, loadConfig, normalizePath, parseIcuMessage, readFileIfExists, readPhpArrayAsJson, readPhpArraysBatch, resolveHardcodedOptions, resolveModel, runTranslation, scanHardcoded, scanProjectHardcoded, sectionHeader, success, unflattenObject, validateIcuPlural, warning, writeFileEnsuringDir };

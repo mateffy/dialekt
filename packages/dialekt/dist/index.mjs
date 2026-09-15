@@ -1,6 +1,5 @@
-import { A as UnknownProviderError, C as computeMissingKeys, D as buildSystemPrompt, E as createOneShotStrategy, F as diffKeys, I as flattenObject, L as unflattenObject, M as readFileIfExists, N as writeFileEnsuringDir, O as buildUserPrompt, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, _ as keyValue, a as formatLanguages, b as warning, c as formatUnusedKeys, d as color, f as detectFormat, g as info, h as glyphs, j as resolveModel, k as TranslationFailedError, l as formatValidate, m as failure, n as formatBenchmark, o as formatMissingKeys, p as drawTable, r as formatError, s as formatTranslate, t as formatAdd, u as banner, v as sectionHeader, w as runTranslation, x as ConfigLoadError, y as success } from "./formatters-QGjIbJBA.mjs";
+import { $ as NodePlatformLayer, A as buildUserPrompt, B as DEFAULT_SCANNERS, C as ConfigLoadError, D as createToolLoopStrategy, E as runTranslation, F as writeFileEnsuringDir, G as scanProjectHardcoded, H as languageForFile, I as chunkKeys, J as DEFAULT_HARDCODED_MIN_LENGTH, K as bladeScanner, L as diffKeys, M as UnknownProviderError, N as resolveModel, O as createOneShotStrategy, P as readFileIfExists, Q as resolveHardcodedOptions, R as flattenObject, S as warning, T as computeMissingKeys, U as normalizePath, V as isIgnoredFinding, W as scanHardcoded, X as isIgnoredAttribute, Y as DEFAULT_IGNORED_ATTRIBUTES, Z as isLikelyTranslatable, _ as glyphs, a as formatError, b as sectionHeader, c as formatMissingKeys, d as formatValidate, et as HardcodedScanError, f as banner, g as failure, h as drawTable, i as formatBenchmark, j as TranslationFailedError, k as buildSystemPrompt, l as formatTranslate, m as detectFormat, n as formatHardcoded, p as color, q as jsxScanner, r as formatAdd, s as formatLanguages, t as formatDoctor, u as formatUnusedKeys, v as info, w as loadConfig, x as success, y as keyValue, z as unflattenObject } from "./hardcoded-formatters-B7waLxzt.mjs";
 import { Data, Effect } from "effect";
-import { NodeContext } from "@effect/platform-node";
 import { Command } from "@effect/platform";
 //#region src/config/define-config.ts
 const defaultChunking = {
@@ -155,15 +154,6 @@ function validateIcuPlural(message) {
 	}
 }
 //#endregion
-//#region src/sdk/node-layer.ts
-/**
-* The only file in this package (besides cli/main.ts) permitted to know
-* this is running on Node.js. Provides FileSystem, Path, and
-* CommandExecutor. Swapping to Bun/Deno later means swapping this one
-* import for @effect/platform-bun's equivalent — nothing else changes.
-*/
-const NodePlatformLayer = NodeContext.layer;
-//#endregion
 //#region src/sdk/php-array-reader.ts
 var PhpExecutionError = class extends Data.TaggedError("PhpExecutionError") {};
 const SINGLE_DUMP = "try { $v = require $argv[1]; } catch (\\Throwable $e) { $v = []; } echo json_encode(is_array($v) ? $v : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);";
@@ -203,4 +193,4 @@ function readPhpArraysBatch(absolutePaths) {
 	});
 }
 //#endregion
-export { AdapterReadError, AdapterWriteError, ConfigLoadError, IcuParseError, NodePlatformLayer, PhpExecutionError, TranslationFailedError, UnknownProviderError, banner, buildSystemPrompt, buildUserPrompt, chunkKeys, color, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, detectFormat, diffKeys, drawTable, extractIcuVariables, failure, flattenObject, formatAdd, formatBenchmark, formatError, formatLanguages, formatMissingKeys, formatTranslate, formatUnusedKeys, formatValidate, glyphs, info, keyValue, loadConfig, parseIcuMessage, readFileIfExists, readPhpArrayAsJson, readPhpArraysBatch, resolveModel, runTranslation, sectionHeader, success, unflattenObject, validateIcuPlural, warning, writeFileEnsuringDir };
+export { AdapterReadError, AdapterWriteError, ConfigLoadError, DEFAULT_HARDCODED_MIN_LENGTH, DEFAULT_IGNORED_ATTRIBUTES, DEFAULT_SCANNERS, HardcodedScanError, IcuParseError, NodePlatformLayer, PhpExecutionError, TranslationFailedError, UnknownProviderError, banner, bladeScanner, buildSystemPrompt, buildUserPrompt, chunkKeys, color, computeMissingKeys, createOneShotStrategy, createToolLoopStrategy, defineConfig, detectFormat, diffKeys, drawTable, extractIcuVariables, failure, flattenObject, formatAdd, formatBenchmark, formatDoctor, formatError, formatHardcoded, formatLanguages, formatMissingKeys, formatTranslate, formatUnusedKeys, formatValidate, glyphs, info, isIgnoredAttribute, isIgnoredFinding, isLikelyTranslatable, jsxScanner, keyValue, languageForFile, loadConfig, normalizePath, parseIcuMessage, readFileIfExists, readPhpArrayAsJson, readPhpArraysBatch, resolveHardcodedOptions, resolveModel, runTranslation, scanHardcoded, scanProjectHardcoded, sectionHeader, success, unflattenObject, validateIcuPlural, warning, writeFileEnsuringDir };

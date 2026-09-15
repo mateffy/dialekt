@@ -28,7 +28,8 @@
     "ai": "^7.0.0",
     "effect": "^3.21.0",
     "jiti": "^2.7.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@ast-grep/napi": "^0.44.0"
   },
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
@@ -41,5 +42,8 @@
   "homepage": "https://github.com/mateffy/dialekt",
   "bugs": "https://github.com/mateffy/dialekt/issues",
   "author": "Mat Effy <mat@mateffy.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "optionalDependencies": {
+    "@ast-grep/lang-php": "^0.0.7"
+  }
 }
