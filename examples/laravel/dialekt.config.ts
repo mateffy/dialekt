@@ -15,4 +15,15 @@ export default defineConfig({
       scanPaths: ["./app", "./resources/views"],
     }),
   ],
+  hardcoded: {
+    scanPaths: ["./resources/views", "./app"],
+    // Manual allow-list. Keep this at the very bottom: it tends to grow.
+    ignore: [
+      {
+        file: "resources/views/welcome.blade.php",
+        text: "FAQ",
+        reason: "Acronym, identical in every supported language",
+      },
+    ],
+  },
 });

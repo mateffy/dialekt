@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { C as computeMissingKeys, E as createOneShotStrategy, N as writeFileEnsuringDir, P as chunkKeys, S as loadConfig, T as createToolLoopStrategy, a as formatLanguages, c as formatUnusedKeys, f as detectFormat, i as formatInit, j as resolveModel, l as formatValidate, n as formatBenchmark, o as formatMissingKeys, r as formatError, s as formatTranslate, t as formatAdd, w as runTranslation } from "../formatters-QGjIbJBA.mjs";
+import { D as createToolLoopStrategy, E as runTranslation, F as writeFileEnsuringDir, G as scanProjectHardcoded, I as chunkKeys, N as resolveModel, O as createOneShotStrategy, T as computeMissingKeys, a as formatError, c as formatMissingKeys, d as formatValidate, i as formatBenchmark, l as formatTranslate, m as detectFormat, n as formatHardcoded, o as formatInit, r as formatAdd, s as formatLanguages, t as formatDoctor, u as formatUnusedKeys, w as loadConfig } from "../hardcoded-formatters-B7waLxzt.mjs";
 import { Console, Effect, Option } from "effect";
-import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command, FileSystem } from "@effect/platform";
+import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Command as Command$1, Options } from "@effect/cli";
 //#region src/cli/config-resolution.ts
 function resolveEffectiveConfig(flags, loaded) {
@@ -586,14 +586,9 @@ const addCommand = Command$1.make("add", {
 });
 //#endregion
 //#region src/cli/commands/missing.ts
-function runMissing(flags, configLoader = loadConfig, missingKeysComputer = computeMissingKeys, logger = (msg) => Console.log(msg)) {
+/** Resolve every missing key across all adapters into flat CLI entries. */
+function collectMissingEntries(effective, missingKeysComputer = computeMissingKeys) {
 	return Effect.gen(function* () {
-		const loaded = yield* configLoader(flags.config);
-		const effective = resolveEffectiveConfig({
-			baseLanguage: Option.getOrUndefined(flags.baseLanguage),
-			language: Option.isSome(flags.language) ? [flags.language.value] : void 0,
-			adapter: Option.getOrUndefined(flags.adapter)
-		}, loaded);
 		const allEntries = [];
 		for (const a of effective.adapters) {
 			const sourceLocale = effective.sourceLocale;
@@ -605,7 +600,17 @@ function runMissing(flags, configLoader = loadConfig, missingKeysComputer = comp
 				key
 			});
 		}
-		yield* logger(formatMissingKeys(allEntries, detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
+		return allEntries;
+	});
+}
+function runMissing(flags, configLoader = loadConfig, missingKeysComputer = computeMissingKeys, logger = (msg) => Console.log(msg)) {
+	return Effect.gen(function* () {
+		const loaded = yield* configLoader(flags.config);
+		yield* logger(formatMissingKeys(yield* collectMissingEntries(resolveEffectiveConfig({
+			baseLanguage: Option.getOrUndefined(flags.baseLanguage),
+			language: Option.isSome(flags.language) ? [flags.language.value] : void 0,
+			adapter: Option.getOrUndefined(flags.adapter)
+		}, loaded), missingKeysComputer), detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
 	}).pipe(Effect.mapError((e) => e));
 }
 const missingCommand = Command$1.make("missing", {
@@ -987,6 +992,49 @@ const initCommand = Command$1.make("init", {
 	}, cwd, deps);
 });
 //#endregion
+//#region src/cli/commands/hardcoded.ts
+function runHardcoded(flags, configLoader = loadConfig, hardcodedRunner = scanProjectHardcoded, logger = (msg) => Console.log(msg)) {
+	return Effect.gen(function* () {
+		yield* logger(formatHardcoded(yield* hardcodedRunner(yield* configLoader(flags.config)), detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0)));
+	}).pipe(Effect.mapError((e) => e));
+}
+const hardcodedCommand = Command$1.make("hardcoded", {
+	config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
+	format: Options.optional(Options.text("format"))
+}, (flags) => runHardcoded(flags));
+//#endregion
+//#region src/cli/commands/doctor.ts
+function runDoctor(flags, configLoader = loadConfig, missingRunner = collectMissingEntries, hardcodedRunner = scanProjectHardcoded, logger = (msg) => Console.log(msg)) {
+	return Effect.gen(function* () {
+		const loaded = yield* configLoader(flags.config);
+		const effective = resolveEffectiveConfig({
+			baseLanguage: Option.getOrUndefined(flags.baseLanguage),
+			language: Option.isSome(flags.language) ? [flags.language.value] : void 0,
+			adapter: Option.getOrUndefined(flags.adapter)
+		}, loaded);
+		const missing = flags.skipMissing ? [] : yield* missingRunner(effective);
+		const hardcoded = flags.skipHardcoded ? [] : yield* hardcodedRunner(effective);
+		const format = detectFormat(flags.format !== void 0 ? Option.getOrUndefined(flags.format) : void 0);
+		yield* logger(formatDoctor({
+			missing,
+			hardcoded,
+			skipped: {
+				missing: flags.skipMissing,
+				hardcoded: flags.skipHardcoded
+			}
+		}, format));
+	}).pipe(Effect.mapError((e) => e));
+}
+const doctorCommand = Command$1.make("doctor", {
+	config: Options.text("config").pipe(Options.withDefault("./dialekt.config.ts")),
+	adapter: Options.optional(Options.text("adapter")),
+	baseLanguage: Options.optional(Options.text("base-language")),
+	language: Options.optional(Options.text("language")),
+	skipMissing: Options.boolean("skip-missing"),
+	skipHardcoded: Options.boolean("skip-hardcoded"),
+	format: Options.optional(Options.text("format"))
+}, (flags) => runDoctor(flags));
+//#endregion
 //#region src/cli/main.ts
 const rootCommand = Command$1.make("dialekt").pipe(Command$1.withSubcommands([
 	initCommand,
@@ -996,7 +1044,9 @@ const rootCommand = Command$1.make("dialekt").pipe(Command$1.withSubcommands([
 	missingCommand,
 	unusedCommand,
 	languagesCommand,
-	benchmarkCommand
+	benchmarkCommand,
+	hardcodedCommand,
+	doctorCommand
 ]));
 const cli = Command$1.run(rootCommand, {
 	name: "dialekt",

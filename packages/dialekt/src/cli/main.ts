@@ -10,6 +10,8 @@ import { unusedCommand } from "./commands/unused.js";
 import { languagesCommand } from "./commands/languages.js";
 import { benchmarkCommand } from "./commands/benchmark.js";
 import { initCommand } from "./commands/init.js";
+import { hardcodedCommand } from "./commands/hardcoded.js";
+import { doctorCommand } from "./commands/doctor.js";
 
 const rootCommand = Command.make("dialekt").pipe(
   Command.withSubcommands([
@@ -21,6 +23,8 @@ const rootCommand = Command.make("dialekt").pipe(
     unusedCommand,
     languagesCommand,
     benchmarkCommand,
+    hardcodedCommand,
+    doctorCommand,
   ]),
 );
 

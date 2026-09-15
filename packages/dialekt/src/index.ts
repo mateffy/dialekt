@@ -1,5 +1,36 @@
 export { defineConfig } from "./config/define-config.js";
 export type { DialektConfig, ModelConfig, ChunkingConfig, RetryConfig } from "./config/types.js";
+export type {
+  HardcodedConfig,
+  HardcodedFinding,
+  HardcodedIgnore,
+  HardcodedKind,
+  HardcodedLanguage,
+  HardcodedLanguageConfig,
+} from "./hardcoded/types.js";
+export {
+  HardcodedScanError,
+  type HardcodedScanner,
+  type HardcodedScanInput,
+  type ResolvedHardcodedOptions,
+} from "./hardcoded/types.js";
+export {
+  DEFAULT_SCANNERS,
+  scanHardcoded,
+  scanProjectHardcoded,
+  languageForFile,
+  normalizePath,
+  isIgnoredFinding,
+} from "./hardcoded/scan.js";
+export {
+  DEFAULT_IGNORED_ATTRIBUTES,
+  DEFAULT_HARDCODED_MIN_LENGTH,
+  resolveHardcodedOptions,
+  isIgnoredAttribute,
+  isLikelyTranslatable,
+} from "./hardcoded/filter.js";
+export { jsxScanner } from "./hardcoded/scanners/jsx.js";
+export { bladeScanner } from "./hardcoded/scanners/blade.js";
 export type { ResourceRef, TranslationAdapter, AdapterCapabilities } from "./adapter/types.js";
 export { AdapterReadError, AdapterWriteError } from "./adapter/types.js";
 export { flattenObject, unflattenObject, diffKeys } from "./keys/flatten.js";
@@ -47,6 +78,8 @@ export {
   formatBenchmark,
   formatError,
 } from "./cli/formatters.js";
+export { formatHardcoded, formatDoctor } from "./cli/hardcoded-formatters.js";
+export type { DoctorResult } from "./cli/hardcoded-formatters.js";
 export type {
   MissingKeyEntry,
   UnusedKeyEntry,

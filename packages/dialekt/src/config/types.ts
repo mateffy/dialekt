@@ -1,7 +1,16 @@
 import type { TranslationAdapter } from "../adapter/types.js";
 import type { ModelConfig } from "../translation/model-registry.js";
+import type { HardcodedConfig } from "../hardcoded/types.js";
 
 export type { ModelConfig };
+export type {
+  HardcodedConfig,
+  HardcodedIgnore,
+  HardcodedLanguageConfig,
+  HardcodedKind,
+  HardcodedLanguage,
+  HardcodedFinding,
+} from "../hardcoded/types.js";
 
 export interface ChunkingConfig {
   readonly maxTokens: number;
@@ -27,4 +36,6 @@ export interface DialektConfig {
   readonly adapters: readonly TranslationAdapter[];
   /** Explicit list of .env files to load before running commands. */
   readonly env?: readonly string[];
+  /** Hardcoded-string detection settings. Keep the `ignore` list at the bottom of the object. */
+  readonly hardcoded?: HardcodedConfig;
 }
